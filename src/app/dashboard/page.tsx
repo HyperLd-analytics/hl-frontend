@@ -1,11 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
 import { useApiQuery } from "@/hooks/use-api-query";
 import { PageError } from "@/components/common/page-error";
 import { PageLoading } from "@/components/common/page-loading";
 import { DashboardOverview } from "@/types/dashboard";
-import { PnlTrendChart } from "@/components/charts/pnl-trend-chart";
+
+const PnlTrendChart = dynamic(
+  () => import("@/components/charts/pnl-trend-chart").then((mod) => mod.PnlTrendChart),
+  { ssr: false }
+);
 
 export default function DashboardPage() {
   const { data, loading, error, refetch } = useApiQuery<DashboardOverview>("/analytics/overview", {

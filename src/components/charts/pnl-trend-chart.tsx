@@ -8,7 +8,7 @@ type PnlTrendChartProps = {
 
 export function PnlTrendChart({ data }: PnlTrendChartProps) {
   return (
-    <div className="h-72 w-full">
+    <div className="h-72 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" />

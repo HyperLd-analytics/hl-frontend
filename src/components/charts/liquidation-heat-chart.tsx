@@ -8,7 +8,7 @@ type LiquidationHeatChartProps = {
 
 export function LiquidationHeatChart({ data }: LiquidationHeatChartProps) {
   return (
-    <div className="h-80 w-full">
+    <div className="h-80 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
           <XAxis dataKey="priceBand" stroke="hsl(var(--muted-foreground))" />

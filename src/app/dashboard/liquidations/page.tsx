@@ -1,11 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
 import { useApiQuery } from "@/hooks/use-api-query";
 import { LiquidationHeatmapResponse } from "@/types/dashboard";
 import { PageError } from "@/components/common/page-error";
 import { PageLoading } from "@/components/common/page-loading";
-import { LiquidationHeatChart } from "@/components/charts/liquidation-heat-chart";
+
+const LiquidationHeatChart = dynamic(
+  () => import("@/components/charts/liquidation-heat-chart").then((mod) => mod.LiquidationHeatChart),
+  { ssr: false }
+);
 
 export default function LiquidationsPage() {
   const { data, loading, error, refetch } = useApiQuery<LiquidationHeatmapResponse>("/liquidations/heatmap", {
