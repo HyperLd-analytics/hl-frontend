@@ -10,6 +10,7 @@ Hyperliquid 链上数据分析 SaaS 前端项目（Next.js 14 + TypeScript + Tai
 npm install
 ```
 
+
 2. 配置环境变量
 
 ```bash
