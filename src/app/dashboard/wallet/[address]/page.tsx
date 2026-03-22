@@ -22,7 +22,7 @@ export default function WalletDetailPage() {
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
     if (sideFilter !== "all") params.set("side", sideFilter);
-    return `/wallets/${encodeURIComponent(address)}/analysis?${params.toString()}`;
+    return `/wallets/${encodeURIComponent(address)}?${params.toString()}`;
   }, [address, page, pageSize, sideFilter]);
   const { data, loading, error, refetch } = useApiQuery<WalletAnalysis>(
     queryPath,

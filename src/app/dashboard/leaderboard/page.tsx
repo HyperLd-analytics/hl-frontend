@@ -20,7 +20,7 @@ export default function LeaderboardPage() {
     params.set("pageSize", String(pageSize));
     params.set("sortBy", sortBy);
     if (search.trim()) params.set("search", search.trim());
-    return `/smart-money/leaderboard?${params.toString()}`;
+    return `/wallets/leaderboard?${params.toString()}`;
   }, [page, pageSize, search, sortBy]);
 
   const { data, loading, error, refetch } = useApiQuery<LeaderboardResponse>(queryPath, {

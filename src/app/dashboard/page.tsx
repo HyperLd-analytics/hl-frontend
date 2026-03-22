@@ -13,7 +13,7 @@ const PnlTrendChart = dynamic(
 );
 
 export default function DashboardPage() {
-  const { data, loading, error, refetch } = useApiQuery<DashboardOverview>("/analytics/overview", {
+  const { data, loading, error, refetch } = useApiQuery<DashboardOverview>("/cohorts/overview", {
     debounceMs: 120
   });
 
