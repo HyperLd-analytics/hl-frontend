@@ -23,26 +23,26 @@ export default function CohortHeatmap({ symbol, hours = 1 }: CohortHeatmapProps)
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchHeatmapData = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (symbol) params.append('symbol', symbol);
+        params.append('hours', hours.toString());
+
+        const response = await fetch(
+          `/api/v1/cohorts/stats?${params.toString()}`
+        );
+        const result = await response.json();
+        setData(result);
+      } catch (error) {
+        console.error('Failed to fetch heatmap data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchHeatmapData();
   }, [symbol, hours]);
-
-  const fetchHeatmapData = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (symbol) params.append('symbol', symbol);
-      params.append('hours', hours.toString());
-
-      const response = await fetch(
-        `/api/v1/cohorts/stats?${params.toString()}`
-      );
-      const result = await response.json();
-      setData(result);
-    } catch (error) {
-      console.error('Failed to fetch heatmap data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return <div className="animate-pulse bg-gray-800 h-96 rounded-lg" />;

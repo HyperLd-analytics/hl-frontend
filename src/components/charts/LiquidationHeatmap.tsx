@@ -24,26 +24,26 @@ export default function LiquidationHeatmap({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchLiquidationData = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (currentPrice) params.append('current_price', currentPrice.toString());
+        params.append('price_range', priceRange.toString());
+
+        const response = await fetch(
+          `/api/v1/liquidation-heatmap/heatmap/${symbol}?${params.toString()}`
+        );
+        const result = await response.json();
+        setData(result);
+      } catch (error) {
+        console.error('Failed to fetch liquidation data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchLiquidationData();
   }, [symbol, currentPrice, priceRange]);
-
-  const fetchLiquidationData = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (currentPrice) params.append('current_price', currentPrice.toString());
-      params.append('price_range', priceRange.toString());
-
-      const response = await fetch(
-        `/api/v1/liquidation-heatmap/heatmap/${symbol}?${params.toString()}`
-      );
-      const result = await response.json();
-      setData(result);
-    } catch (error) {
-      console.error('Failed to fetch liquidation data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return <div className="animate-pulse bg-gray-800 h-96 rounded-lg" />;

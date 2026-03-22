@@ -1,6 +1,6 @@
 import { AUTH_COOKIE_NAME, clearAccessTokenCookie, setAccessTokenCookie } from "@/lib/auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL ?? "");
 const API_PREFIX = "/api/v1";
 
 type ApiFetchOptions = RequestInit & {
@@ -81,14 +81,24 @@ export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: 
   if (!response.ok) {
     let message = "请求失败";
     try {
-      const payload = (await response.json()) as { message?: string };
-      if (payload.message) message = payload.message;
+      // Clone response to avoid body stream issues
+      const clonedResponse = response.clone();
+      const text = await clonedResponse.text();
+      if (text) {
+        try {
+          const payload = JSON.parse(text) as { message?: string };
+          if (payload.message) message = payload.message;
+        } catch {
+          message = text;
+        }
+      }
     } catch {
-      const text = await response.text();
-      if (text) message = text;
+      // Ignore
     }
     throw new Error(message);
   }
 
-  return (await response.json()) as T;
+  // Clone response before reading to avoid body stream issues
+  const clonedResponse = response.clone();
+  return (await clonedResponse.json()) as T;
 }
