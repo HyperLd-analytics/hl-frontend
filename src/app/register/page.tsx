@@ -1,31 +1,47 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { setAccessTokenCookie } from "@/lib/auth";
 import { useApi } from "@/hooks/use-api";
 import { PageError } from "@/components/common/page-error";
 
-function LoginFormInner() {
+function RegisterFormInner() {
   const { request, loading, error } = useApi();
-  const [email, setEmail] = useState("demo@hyperliquidlens.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [localError, setLocalError] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/dashboard";
 
-  const onLogin = async () => {
+  const onRegister = async () => {
+    setLocalError("");
+
+    if (!email || !password) {
+      setLocalError("请填写邮箱和密码");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setLocalError("两次输入的密码不一致");
+      return;
+    }
+
+    if (password.length < 6) {
+      setLocalError("密码长度至少为6位");
+      return;
+    }
+
     try {
-      const res = await request<{ accessToken: string }>({
-        path: "/auth/login",
+      await request<{ id: string; email: string }>({
+        path: "/auth/register",
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-      setAccessTokenCookie(res.accessToken);
-      router.push(redirect);
+      // 注册成功后跳转到登录页
+      router.push("/login?registered=true");
     } catch {
       // 错误已由 useApi 统一接管
     }
@@ -34,16 +50,11 @@ function LoginFormInner() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-semibold">登录 Hyperliquid Lens</h1>
-        <p className="text-sm text-muted-foreground">先用账号密码登录，后续可扩展 OAuth 或钱包签名。</p>
-        <p className="text-sm text-center text-muted-foreground">
-          还没有账号？{" "}
-          <Link href="/register" className="text-primary hover:underline">
-            立即注册
-          </Link>
-        </p>
+        <h1 className="text-xl font-semibold">注册 Hyperliquid Lens</h1>
+        <p className="text-sm text-muted-foreground">创建账号开始使用</p>
         <input
           className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="邮箱"
@@ -53,12 +64,21 @@ function LoginFormInner() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="密码"
+          placeholder="密码（至少6位）"
         />
-        <Button className="w-full" onClick={onLogin} disabled={loading}>
-          {loading ? "登录中..." : "登录"}
+        <input
+          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="确认密码"
+        />
+        <Button className="w-full" onClick={onRegister} disabled={loading}>
+          {loading ? "注册中..." : "注册"}
         </Button>
-        {error && <PageError title="登录失败" message={error.message} />}
+        {(error || localError) && (
+          <PageError title="注册失败" message={error?.message || localError} />
+        )}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t" />
@@ -124,15 +144,21 @@ function LoginFormInner() {
             GitHub
           </Button>
         </div>
+        <p className="text-sm text-center text-muted-foreground">
+          已有账号？{" "}
+          <Link href="/login" className="text-primary hover:underline">
+            立即登录
+          </Link>
+        </p>
       </Card>
     </main>
   );
 }
 
-export default function LoginPage() {
+export default function RegisterPage() {
   return (
     <Suspense fallback={<main className="flex min-h-screen items-center justify-center px-4">加载中...</main>}>
-      <LoginFormInner />
+      <RegisterFormInner />
     </Suspense>
   );
 }
