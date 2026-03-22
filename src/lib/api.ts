@@ -20,11 +20,6 @@ function getAccessTokenFromCookie(): string | null {
   return null;
 }
 
-type ApiFetchOptions = RequestInit & {
-  path: string;
-  retryOnAuthError?: boolean;
-};
-
 async function tryRefreshToken() {
   const res = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/refresh`, {
     method: "POST",
@@ -45,9 +40,9 @@ async function tryRefreshToken() {
 
 export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: ApiFetchOptions): Promise<T> {
   const token = getAccessTokenFromCookie();
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(config.headers ?? {})
+    ...(config.headers as Record<string, string> ?? {})
   };
   
   // 如果有 token，添加到 Authorization header
