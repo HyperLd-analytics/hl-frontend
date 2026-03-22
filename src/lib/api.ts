@@ -1,6 +1,7 @@
 import { clearAccessTokenCookie, setAccessTokenCookie } from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_PREFIX = "/api/v1";
 
 type ApiFetchOptions = RequestInit & {
   path: string;
@@ -8,7 +9,7 @@ type ApiFetchOptions = RequestInit & {
 };
 
 async function tryRefreshToken() {
-  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+  const res = await fetch(`${API_BASE_URL}${API_PREFIX}/auth/refresh`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -26,7 +27,7 @@ async function tryRefreshToken() {
 }
 
 export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: ApiFetchOptions): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${API_PREFIX}${path}`, {
     ...config,
     credentials: "include",
     cache: "no-store",
