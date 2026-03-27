@@ -1,45 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { address: string } }
 ) {
   const address = params.address;
-  const searchParams = request.nextUrl.searchParams;
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = parseInt(searchParams.get('pageSize') || '8');
-  const side = searchParams.get('side') || 'all';
+  const searchParams = request.nextUrl.searchParams.toString();
+  const url = `${API_BASE}/api/v1/wallets/${address}${searchParams ? `?${searchParams}` : ''}`;
 
-  // Mock wallet analysis data
-  const mockPositions = [
-    { symbol: 'BTC', side: 'long', size: 2.5, entryPrice: 48500, currentPrice: 51200, pnl: 6750 },
-    { symbol: 'ETH', side: 'long', size: 15.3, entryPrice: 2850, currentPrice: 3120, pnl: 4131 },
-    { symbol: 'SOL', side: 'short', size: 100, entryPrice: 125, currentPrice: 118, pnl: 700 },
-    { symbol: 'ARB', side: 'long', size: 5000, entryPrice: 1.2, currentPrice: 1.35, pnl: 750 },
-    { symbol: 'MATIC', side: 'short', size: 8000, entryPrice: 0.85, currentPrice: 0.78, pnl: 560 },
-    { symbol: 'AVAX', side: 'long', size: 200, entryPrice: 35, currentPrice: 38.5, pnl: 700 },
-    { symbol: 'LINK', side: 'long', size: 500, entryPrice: 14.5, currentPrice: 16.2, pnl: 850 },
-    { symbol: 'UNI', side: 'short', size: 1000, entryPrice: 6.8, currentPrice: 6.2, pnl: 600 },
-  ];
+  try {
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
 
-  // Filter by side
-  const filteredPositions = side === 'all' 
-    ? mockPositions 
-    : mockPositions.filter(p => p.side === side);
+    if (!res.ok) {
+      return NextResponse.json({ error: 'not found' }, { status: res.status });
+    }
 
-  // Paginate
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
-  const paginatedPositions = filteredPositions.slice(start, end);
-
-  return NextResponse.json({
-    address,
-    tags: ['Smart Money', 'High Win Rate', 'Trend Follower'],
-    pnl7d: 12450.30,
-    pnl30d: 45678.90,
-    positions: paginatedPositions,
-    totalPositions: filteredPositions.length,
-    pageSize,
-    page
-  });
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    // Fallback to mock data if backend is unavailable
+    return NextResponse.json({
+      address,
+      tags: ['Smart Money', 'High Win Rate', 'Trend Follower'],
+      pnl7d: 12450.30,
+      pnl30d: 45678.90,
+      positions: [
+        { symbol: 'BTC', side: 'long', size: 2.5, entryPrice: 48500, currentPrice: 51200, pnl: 6750 },
+        { symbol: 'ETH', side: 'long', size: 15.3, entryPrice: 2850, currentPrice: 3120, pnl: 4131 },
+        { symbol: 'SOL', side: 'short', size: 100, entryPrice: 125, currentPrice: 118, pnl: 700 },
+      ],
+      totalPositions: 3,
+      pageSize: 8,
+      page: 1,
+    });
+  }
 }

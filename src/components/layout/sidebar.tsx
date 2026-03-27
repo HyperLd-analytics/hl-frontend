@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BellRing, Flame, GitCompare, Home, Menu, Wallet } from "lucide-react";
+import { BarChart3, BellRing, Flame, GitCompare, Home, Menu, TrendingUp, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { Separator } from "@/components/ui/separator";
 
 const navItems = [
   { href: "/dashboard", label: "总览", icon: Home },
+  { href: "/dashboard/hypertracker", label: "Hypertracker", icon: TrendingUp },
+  { href: "/dashboard/segments", label: "  Segments", icon: Users },
   { href: "/dashboard/leaderboard", label: "Smart Money 排行榜", icon: BarChart3 },
   { href: "/dashboard/compare", label: "钱包对比", icon: GitCompare },
   { href: "/dashboard/liquidations", label: "清算热图", icon: Flame },

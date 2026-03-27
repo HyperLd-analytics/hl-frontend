@@ -1,230 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useApiQuery } from "@/hooks/use-api-query";
+import { WalletAnalysis } from "@/types/dashboard";
 import { PageError } from "@/components/common/page-error";
 import { PageLoading } from "@/components/common/page-loading";
 import { TableLoading } from "@/components/common/table-loading";
 
-type Position = {
+type PositionWithSignal = {
   symbol: string;
-  positionSize: number;
-  entryPrice: number;
-  markPrice: number;
-  leverage: number;
-  liquidationPx?: number;
-  unrealizedPnl?: number;
-  positionValue?: number;
-  returnOnEquity?: number;
-  snapshotAt: string;
+  side: "long" | "short";
+  size: number;
+  signal?: "buy" | "sell";
 };
-
-type PositionHistoryEvent = {
-  symbol: string;
-  changeType: string;
-  previousSize: number;
-  currentSize: number;
-  changeAmount: number;
-  entryPrice: number;
-  markPrice: number;
-  leverage: number;
-  unrealizedPnl: number;
-  pnlPercent: number;
-  snapshotAt: string;
-};
-
-type PositionsResponse = { address: string; positions: Position[]; message?: string };
-type HistoryResponse = { address: string; events: PositionHistoryEvent[]; total: number; message?: string };
-
-const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  open: { label: "开仓", color: "bg-blue-500/20 text-blue-400" },
-  close: { label: "平仓", color: "bg-red-500/20 text-red-400" },
-  add: { label: "增仓", color: "bg-green-500/20 text-green-400" },
-  reduce: { label: "减仓", color: "bg-yellow-500/20 text-yellow-400" },
-};
-
-function formatUSD(v?: number | null) {
-  if (v === undefined || v === null) return "-";
-  return v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
-}
-function formatPct(v?: number | null) {
-  if (v === undefined || v === null) return "-";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
-}
 
 export default function WalletDetailPage() {
   const params = useParams<{ address: string }>();
   const address = params.address;
-  const [tab, setTab] = useState<"positions" | "history">("positions");
-  const [historyLimit] = useState(30);
-
-  const {
-    data: positions,
-    loading: posLoading,
-    error: posError,
-    refetch: posRefetch,
-  } = useApiQuery<PositionsResponse>(
-    `/positions/${encodeURIComponent(address!)}/current`,
-    { enabled: Boolean(address) && tab === "positions", staleTimeMs: 30_000, pollingIntervalMs: 60_000 },
+  const [sideFilter, setSideFilter] = useState<"all" | "long" | "short">("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+  const queryPath = useMemo(() => {
+    if (!address) return "";
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
+    if (sideFilter !== "all") params.set("side", sideFilter);
+    return `/wallets/${encodeURIComponent(address)}?${params.toString()}`;
+  }, [address, page, pageSize, sideFilter]);
+  const { data, loading, error, refetch } = useApiQuery<WalletAnalysis>(
+    queryPath,
+    { enabled: Boolean(address), debounceMs: 120, staleTimeMs: 8_000, pollingIntervalMs: 15_000 }
   );
+  const totalPages = Math.max(1, Math.ceil((data?.totalPositions ?? 0) / (data?.pageSize ?? pageSize)));
 
-  const {
-    data: history,
-    loading: histLoading,
-    error: histError,
-    refetch: histRefetch,
-  } = useApiQuery<HistoryResponse>(
-    `/positions/${encodeURIComponent(address!)}/history?limit=${historyLimit}`,
-    { enabled: Boolean(address) && tab === "history", staleTimeMs: 30_000 },
-  );
+  // Track previous positions to compute buy/sell signals
+  const prevPositionsRef = useRef<Map<string, number>>(new Map());
+  const positionsWithSignal: PositionWithSignal[] = useMemo(() => {
+    const prev = prevPositionsRef.current;
+    const curr = new Map<string, number>();
+    const result: PositionWithSignal[] = [];
+    for (const p of data?.positions ?? []) {
+      const key = `${p.symbol}-${p.side}`;
+      const prevSize = prev.get(key) ?? 0;
+      const currSize = p.size;
+      curr.set(key, currSize);
+      let signal: "buy" | "sell" | undefined;
+      if (prevSize > 0 && currSize > prevSize) signal = "buy";
+      else if (prevSize > 0 && currSize < prevSize) signal = "sell";
+      result.push({ symbol: p.symbol, side: p.side, size: p.size, signal });
+    }
+    prevPositionsRef.current = curr;
+    return result;
+  }, [data?.positions]);
 
-  if (!address) return null;
-
-  const loading = tab === "positions" ? posLoading : histLoading;
-  const error = tab === "positions" ? posError : histError;
-  const refetch = tab === "positions" ? posRefetch : histRefetch;
-
-  if (loading && !positions && !history) return <PageLoading />;
-  if (error && !positions && !history) return <PageError message={error.message} onRetry={refetch} />;
+  if (loading && !data) return <PageLoading />;
+  if (error && !data) return <PageError message={error.message} onRetry={refetch} />;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          钱包追踪
-          <span className="ml-2 font-mono text-sm text-muted-foreground">
-            {address?.slice(0, 8)}...{address?.slice(-6)}
-          </span>
-        </h1>
-        {/* Tab 切换 */}
-        <div className="flex gap-1 rounded-md border border-border p-1">
-          {(["positions", "history"] as const).map((t) => (
-            <Button
-              key={t}
-              size="sm"
-              variant={tab === t ? "default" : "ghost"}
-              onClick={() => setTab(t)}
-            >
-              {t === "positions" ? "当前仓位" : "仓位变动"}
-            </Button>
+      <h1 className="text-2xl font-semibold">钱包分析：{address}</h1>
+      <Card className="space-y-2">
+        <p>标签：{data?.tags?.join(", ") || "-"}</p>
+        <p>7D PnL：{data?.pnl7d ?? 0}</p>
+        <p>30D PnL：{data?.pnl30d ?? 0}</p>
+      </Card>
+      <Card>
+        <h2 className="mb-2 font-medium">当前仓位</h2>
+        <div className="mb-3 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={sideFilter === "all" ? "default" : "outline"}
+            onClick={() => {
+              setSideFilter("all");
+              setPage(1);
+            }}
+          >
+            全部
+          </Button>
+          <Button
+            size="sm"
+            variant={sideFilter === "long" ? "default" : "outline"}
+            onClick={() => {
+              setSideFilter("long");
+              setPage(1);
+            }}
+          >
+            Long
+          </Button>
+          <Button
+            size="sm"
+            variant={sideFilter === "short" ? "default" : "outline"}
+            onClick={() => {
+              setSideFilter("short");
+              setPage(1);
+            }}
+          >
+            Short
+          </Button>
+        </div>
+        <div className="space-y-2 text-sm">
+          {positionsWithSignal.map((p) => (
+            <div key={`${p.symbol}-${p.side}`} className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                {p.signal === "buy" && (
+                  <span className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                    🟢 BUY
+                  </span>
+                )}
+                {p.signal === "sell" && (
+                  <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                    🔴 SELL
+                  </span>
+                )}
+                <span className="text-muted-foreground">{p.symbol}</span>
+                <span className="text-xs text-muted-foreground">· {p.side.toUpperCase()}</span>
+              </span>
+              <span className={p.signal === "buy" ? "text-green-600" : p.signal === "sell" ? "text-red-600" : ""}>
+                {p.size}
+              </span>
+            </div>
           ))}
         </div>
-      </div>
-
-      {/* 当前仓位 */}
-      {tab === "positions" && (
-        <>
-          {positions?.positions && positions.positions.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {positions.positions.map((p) => {
-                const pnlColor = (p.unrealizedPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400";
-                return (
-                  <Card key={p.symbol} className="space-y-2 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-semibold">{p.symbol}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {p.leverage}x 杠杆
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                      <div>
-                        <div className="text-xs text-muted-foreground">持仓数量</div>
-                        <div>{(p.positionSize ?? 0).toFixed(4)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">开仓均价</div>
-                        <div>${(p.entryPrice ?? 0).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">标记价格</div>
-                        <div>${(p.markPrice ?? 0).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">强平价格</div>
-                        <div>{p.liquidationPx ? `$${p.liquidationPx.toFixed(2)}` : "-"}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">未实现盈亏</div>
-                        <div className={pnlColor}>{formatUSD(p.unrealizedPnl)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">收益率</div>
-                        <div className={pnlColor}>{formatPct(p.returnOnEquity)}</div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <Card className="py-12 text-center text-muted-foreground">
-              当前无活跃仓位
-            </Card>
-          )}
-          {posLoading && <TableLoading rows={3} columns={6} />}
-        </>
-      )}
-
-      {/* 仓位变动历史 */}
-      {tab === "history" && (
-        <>
-          {history?.events && history.events.length > 0 ? (
-            <Card className="overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-left">时间</th>
-                    <th className="px-3 py-2 text-left">币种</th>
-                    <th className="px-3 py-2 text-left">变动类型</th>
-                    <th className="px-3 py-2 text-right">数量变化</th>
-                    <th className="px-3 py-2 text-right">当前数量</th>
-                    <th className="px-3 py-2 text-right">开仓均价</th>
-                    <th className="px-3 py-2 text-right">盈亏</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.events.map((e, i) => {
-                    const ct = CHANGE_TYPE_LABELS[e.changeType] ?? { label: e.changeType, color: "bg-muted" };
-                    return (
-                      <tr key={i} className="border-t border-border">
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {new Date(e.snapshotAt).toLocaleString("zh-CN")}
-                        </td>
-                        <td className="px-3 py-2 font-medium">{e.symbol}</td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-block rounded px-1.5 py-0.5 text-xs ${ct.color}`}>
-                            {ct.label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={e.changeAmount >= 0 ? "text-green-400" : "text-red-400"}>
-                            {e.changeAmount >= 0 ? "+" : ""}{e.changeAmount.toFixed(4)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right">{(e.currentSize ?? 0).toFixed(4)}</td>
-                        <td className="px-3 py-2 text-right">${(e.entryPrice ?? 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={e.unrealizedPnl >= 0 ? "text-green-400" : "text-red-400"}>
-                            {formatUSD(e.unrealizedPnl)} ({formatPct(e.pnlPercent)})
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Card>
-          ) : (
-            <Card className="py-12 text-center text-muted-foreground">
-              暂无仓位变动记录
-            </Card>
-          )}
-          {histLoading && <TableLoading rows={5} columns={7} />}
-        </>
-      )}
+        {loading && <TableLoading rows={4} columns={2} />}
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
+            上一页
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {page} / {totalPages}
+          </span>
+          <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((prev) => prev + 1)}>
+            下一页
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
