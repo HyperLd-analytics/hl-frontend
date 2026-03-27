@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BellRing, Flame, Home, Menu, Wallet } from "lucide-react";
+import { BarChart3, BellRing, Flame, GitCompare, Home, Menu, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 const navItems = [
   { href: "/dashboard", label: "总览", icon: Home },
   { href: "/dashboard/leaderboard", label: "Smart Money 排行榜", icon: BarChart3 },
+  { href: "/dashboard/compare", label: "钱包对比", icon: GitCompare },
   { href: "/dashboard/liquidations", label: "清算热图", icon: Flame },
   { href: "/dashboard/alerts", label: "告警配置", icon: BellRing },
   { href: "/dashboard/wallet/0x1234...abcd", label: "钱包分析示例", icon: Wallet }
