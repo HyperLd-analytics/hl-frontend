@@ -1,6 +1,7 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || 'https://hl-backend-production-4aa1.up.railway.app';
 
 export async function GET(
   request: NextRequest,
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   const path = params.path.join('/');
   const searchParams = request.nextUrl.searchParams.toString();
-  const url = `${API_BASE}/api/v1/cohorts/segment/${path}${searchParams ? `?${searchParams}` : ''}`;
+  const url = `${RAILWAY_URL}/api/v1/cohorts/segment/${path}${searchParams ? `?${searchParams}` : ''}`;
 
   try {
     const res = await fetch(url, {

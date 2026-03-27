@@ -1,15 +1,13 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
 
 export async function GET() {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/overview`, {
-      method: "POST",
+    const res = await fetch(`${RAILWAY_URL}/api/v1/analytics/overview`, {
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 20 }),
+      cache: "no-store",
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
