@@ -96,7 +96,7 @@ export function WalletRadarChart({ wallets }: WalletRadarChartProps) {
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value: number, name: string) => [`${value}%`, name]}
+            formatter={(value, name) => [`${value}%`, name]}
           />
           <Legend
             wrapperStyle={{ fontSize: 12 }}

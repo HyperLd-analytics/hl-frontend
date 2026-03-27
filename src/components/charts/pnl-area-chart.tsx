@@ -76,8 +76,8 @@ export function PnLAreaChart({
               fontSize: 12,
             }}
             labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
-            formatter={(value: number, name: string) => [
-              `$${value.toLocaleString()}`,
+            formatter={(value, name) => [
+              `$${(value as number).toLocaleString()}`,
               name === "pnl" ? "每日盈亏" : "累计盈亏",
             ]}
           />

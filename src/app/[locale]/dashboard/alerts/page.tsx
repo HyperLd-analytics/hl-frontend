@@ -19,6 +19,12 @@ const ALERT_TYPE_OPTIONS = [
   { value: "big_trade", label: "大额交易预警" },
 ];
 
+const PRIORITY_OPTIONS = [
+  { value: 1, label: "低" },
+  { value: 2, label: "中" },
+  { value: 3, label: "高" },
+];
+
 const createAlertSchema = z.object({
   name: z.string().trim().max(100, "规则名称不能超过 100 个字符").optional(),
   alert_type: z.string().min(1, "请选择告警类型"),

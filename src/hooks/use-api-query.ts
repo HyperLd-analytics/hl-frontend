@@ -12,7 +12,7 @@ type UseApiQueryOptions = {
 
 const cacheStore = new Map<string, { data: unknown; timestamp: number }>();
 
-export function useApiQuery<T>(path: string, options: UseApiQueryOptions = {}) {
+export function useApiQuery<T>(path: string | null, options: UseApiQueryOptions = {}) {
   const { enabled = true, debounceMs = 0, staleTimeMs = 0, pollingIntervalMs = 0 } = options;
   const { request, loading, error } = useApi();
   const [data, setData] = useState<T | null>(null);

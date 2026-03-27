@@ -74,11 +74,11 @@ export function PositionDistributionChart({ data }: PositionDistributionChartPro
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value: number, name: string, props: any) => {
-              const item = props.payload;
+            formatter={(value, name, props) => {
+              const item = (props as any).payload;
               return [
-                <div key={name} className="space-y-1">
-                  <div>{name}: ${value.toLocaleString()} ({item.pct}%)</div>
+                <div key={String(name)} className="space-y-1">
+                  <div>{name}: ${(value as number).toLocaleString()} ({item.pct}%)</div>
                   {item.pnl !== undefined && (
                     <div className="text-xs text-muted-foreground">
                       PnL: <span style={{ color: item.pnl >= 0 ? "#22c55e" : "#ef4444" }}>

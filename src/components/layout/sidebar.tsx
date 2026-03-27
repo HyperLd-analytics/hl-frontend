@@ -66,6 +66,8 @@ function SidebarContent() {
 type SidebarProps = {
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  username?: string | null;
+  userId?: string;
 };
 
 export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
