@@ -147,16 +147,16 @@ export default function CohortDetailPage() {
     setPage(1);
   };
 
-  const wallets = data?.wallets ?? [];
   const stats = data?.stats;
 
   const sortedWallets = useMemo(() => {
+    const wallets = data?.wallets ?? [];
     return [...wallets].sort((a, b) => {
       const aVal = a[sortBy === "win_rate" ? "winRate" : sortBy === "account_value" ? "accountValue" : sortBy === "volume" ? "volume30d" : sortBy === "score" ? "score" : "totalPnl"] ?? 0;
       const bVal = b[sortBy === "win_rate" ? "winRate" : sortBy === "account_value" ? "accountValue" : sortBy === "volume" ? "volume30d" : sortBy === "score" ? "score" : "totalPnl"] ?? 0;
       return sortDir === "asc" ? aVal - bVal : bVal - aVal;
     });
-  }, [wallets, sortBy, sortDir]);
+  }, [data, sortBy, sortDir]);
 
   if (!isValidCohort) {
     return (

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export async function GET() {
@@ -9,8 +11,13 @@ export async function GET() {
       fetch(`${API_BASE}/api/v1/cohorts/overview`, { cache: "no-store" }),
     ]);
 
-    if (!statsRes.ok || !overviewRes.ok) {
-      throw new Error("Backend error");
+    if (!statsRes.ok) {
+      const text = await statsRes.text().catch(() => "");
+      throw new Error(`Stats error ${statsRes.status}: ${text}`);
+    }
+    if (!overviewRes.ok) {
+      const text = await overviewRes.text().catch(() => "");
+      throw new Error(`Overview error ${overviewRes.status}: ${text}`);
     }
 
     const [stats, overview]: [Record<string, unknown>, Record<string, unknown>] =
