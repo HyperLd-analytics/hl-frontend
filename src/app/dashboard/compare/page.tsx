@@ -170,18 +170,18 @@ export default function ComparePage() {
                     <tbody>
                       <MetricRow
                         label="综合评分"
-                        values={data.wallets.map((w) => ({ addr: w.address, v: w.score.toFixed(1), raw: w.score }))}
-                        best={Math.max(...data.wallets.map((w) => w.score))}
+                        values={data.wallets.map((w) => ({ addr: w.address, v: (w.score ?? 0).toFixed(1), raw: w.score ?? 0 }))}
+                        best={Math.max(...data.wallets.map((w) => w.score ?? 0))}
                       />
                       <MetricRow
                         label="累计 PnL"
-                        values={data.wallets.map((w) => ({ addr: w.address, v: fmtUSD(w.totalPnl), raw: w.totalPnl }))}
-                        best={Math.max(...data.wallets.map((w) => w.totalPnl))}
+                        values={data.wallets.map((w) => ({ addr: w.address, v: fmtUSD(w.totalPnl), raw: w.totalPnl ?? 0 }))}
+                        best={Math.max(...data.wallets.map((w) => w.totalPnl ?? 0))}
                       />
                       <MetricRow
                         label="胜率"
-                        values={data.wallets.map((w) => ({ addr: w.address, v: `${w.winRate.toFixed(1)}%`, raw: w.winRate }))}
-                        best={Math.max(...data.wallets.map((w) => w.winRate))}
+                        values={data.wallets.map((w) => ({ addr: w.address, v: `${(w.winRate ?? 0).toFixed(1)}%`, raw: w.winRate ?? 0 }))}
+                        best={Math.max(...data.wallets.map((w) => w.winRate ?? 0))}
                       />
                       <MetricRow
                         label="30天交易量"

@@ -211,18 +211,18 @@ export default function LeaderboardPage() {
                 <td className="px-3 py-2">
                   <span
                     className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
-                      item.score >= 80
+                      (item.score ?? 0) >= 80
                         ? "bg-green-500/20 text-green-500"
-                        : item.score >= 50
+                        : (item.score ?? 0) >= 50
                           ? "bg-yellow-500/20 text-yellow-500"
                           : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {item.score.toFixed(1)}
+                    {(item.score ?? 0).toFixed(1)}
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <span className={item.total_pnl >= 0 ? "text-green-500" : "text-red-500"}>
+                  <span className={(item.total_pnl ?? 0) >= 0 ? "text-green-500" : "text-red-500"}>
                     {formatPnl(item.total_pnl)}
                   </span>
                 </td>

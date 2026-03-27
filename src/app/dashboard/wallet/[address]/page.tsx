@@ -132,15 +132,15 @@ export default function WalletDetailPage() {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                       <div>
                         <div className="text-xs text-muted-foreground">持仓数量</div>
-                        <div>{p.positionSize.toFixed(4)}</div>
+                        <div>{(p.positionSize ?? 0).toFixed(4)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">开仓均价</div>
-                        <div>${p.entryPrice.toFixed(2)}</div>
+                        <div>${(p.entryPrice ?? 0).toFixed(2)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">标记价格</div>
-                        <div>${p.markPrice.toFixed(2)}</div>
+                        <div>${(p.markPrice ?? 0).toFixed(2)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">强平价格</div>
@@ -204,8 +204,8 @@ export default function WalletDetailPage() {
                             {e.changeAmount >= 0 ? "+" : ""}{e.changeAmount.toFixed(4)}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-right">{e.currentSize.toFixed(4)}</td>
-                        <td className="px-3 py-2 text-right">${e.entryPrice.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{(e.currentSize ?? 0).toFixed(4)}</td>
+                        <td className="px-3 py-2 text-right">${(e.entryPrice ?? 0).toFixed(2)}</td>
                         <td className="px-3 py-2 text-right">
                           <span className={e.unrealizedPnl >= 0 ? "text-green-400" : "text-red-400"}>
                             {formatUSD(e.unrealizedPnl)} ({formatPct(e.pnlPercent)})

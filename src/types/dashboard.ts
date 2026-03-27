@@ -42,11 +42,29 @@ export type LiquidationHeatmapResponse = {
 
 export type AlertRule = {
   id: string;
-  name: string;
-  enabled: boolean;
-  condition: string;
+  name: string | null;
+  alert_type: string;
+  target: string;
+  condition: Record<string, unknown>;
+  channel: string;
+  priority: number;
+  is_active: boolean;
+  last_triggered: string | null;
+  created_at: string;
 };
 
-export type AlertsResponse = {
-  rules: AlertRule[];
+export type AlertHistoryItem = {
+  id: number;
+  triggeredAt: string;
+  message: string;
+  payload: Record<string, unknown> | null;
 };
+
+export type AlertHistoryResponse = {
+  alertId: string;
+  alertName: string | null;
+  history: AlertHistoryItem[];
+  total: number;
+};
+
+export type AlertsResponse = AlertRule[];
