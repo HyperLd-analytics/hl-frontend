@@ -16,6 +16,41 @@ import {
 } from "@/types/wallet";
 import { useApi } from "@/hooks/use-api";
 
+function getAccessToken() {
+  if (typeof document === "undefined") return null;
+  const cookies = document.cookie.split(";");
+  for (const c of cookies) {
+    const [k, v] = c.trim().split("=");
+    if (k === "hl_access_token") return decodeURIComponent(v);
+  }
+  return null;
+}
+
+async function exportCSV(filters: WalletFilter) {
+  const params = new URLSearchParams();
+  params.set("sort_by", filters.sortBy);
+  params.set("sort_dir", filters.sortDir);
+  if (filters.search?.trim()) params.set("search", filters.search.trim());
+  if (filters.sizeCohort) params.set("size_cohort", filters.sizeCohort);
+  if (filters.pnlCohort) params.set("pnl_cohort", filters.pnlCohort);
+  if (filters.label) params.set("label", filters.label);
+  const token = getAccessToken();
+  const res = await fetch(`/api/v1/exports/csv?${params.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("导出失败");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = res.headers.get("Content-Disposition")?.match(/filename=(.+)/)?.[1] ?? "export.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const DEFAULT_FILTERS: WalletFilter = {
   sortBy: "score",
   sortDir: "desc",
@@ -39,6 +74,7 @@ export default function LeaderboardPage() {
   const [filters, setFilters] = useState<WalletFilter>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   // 加载已保存的筛选器
   const loadSavedFilters = useCallback(async () => {
@@ -119,6 +155,23 @@ export default function LeaderboardPage() {
         <span className="shrink-0 text-sm text-muted-foreground">
           共 {data?.pagination?.total ?? 0} 个钱包
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await exportCSV(filters);
+            } catch {
+              // ignore
+            } finally {
+              setExporting(false);
+            }
+          }}
+        >
+          {exporting ? "导出中..." : "导出 CSV"}
+        </Button>
       </Card>
 
       {/* 筛选面板 */}
