@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpDown, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
-type TopWallet = {
+type WalletStats = {
   address: string;
   totalPnl: number;
   volume30d: number;
@@ -20,8 +19,8 @@ type TopWallet = {
 };
 
 type TopWalletsProps = {
-  wallets?: TopWallet[];
-  loading?: boolean;
+  cohort?: string;
+  limit?: number;
   compact?: boolean;
 };
 
@@ -34,11 +33,11 @@ const COHORT_LABELS: Record<string, string> = {
 };
 
 const COHORT_COLORS: Record<string, string> = {
-  MONEY_PRINTER: "bg-green-500/10 text-green-500 border-green-500/20",
-  PROFIT: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  BREAK_EVEN: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  REKT: "bg-red-500/10 text-red-500 border-red-500/20",
-  GIGA_REKT: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  MONEY_PRINTER: "bg-green-500/10 text-green-500",
+  PROFIT: "bg-emerald-500/10 text-emerald-500",
+  BREAK_EVEN: "bg-yellow-500/10 text-yellow-500",
+  REKT: "bg-red-500/10 text-red-500",
+  GIGA_REKT: "bg-purple-500/10 text-purple-500",
 };
 
 function formatPnl(value: number): string {
@@ -74,7 +73,21 @@ function formatLastActive(lastActive: string | undefined): string {
   }
 }
 
-function WalletRow({ wallet, compact }: { wallet: TopWallet; compact?: boolean }) {
+function SkeletonRow() {
+  return (
+    <div className="flex items-center gap-3 py-3 px-4">
+      <div className="flex-1">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-3 w-20 mt-1" />
+      </div>
+      <Skeleton className="h-4 w-16" />
+      <Skeleton className="h-4 w-14" />
+      <Skeleton className="h-4 w-12" />
+    </div>
+  );
+}
+
+function WalletRow({ wallet, compact }: { wallet: WalletStats; compact?: boolean }) {
   const pnlColor = wallet.totalPnl >= 0 ? "text-green-500" : "text-red-500";
 
   return (
@@ -82,7 +95,7 @@ function WalletRow({ wallet, compact }: { wallet: TopWallet; compact?: boolean }
       {/* Address */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="font-mono text-sm text-foreground truncate">
+          <span className="font-mono text-sm text-foreground">
             {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
           </span>
           <CopyButton value={wallet.address} size="xs" />
@@ -128,28 +141,36 @@ function WalletRow({ wallet, compact }: { wallet: TopWallet; compact?: boolean }
   );
 }
 
-function SkeletonRow() {
-  return (
-    <div className="flex items-center gap-3 py-3 px-4">
-      <div className="flex-1">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-3 w-20 mt-1" />
-      </div>
-      <Skeleton className="h-4 w-16" />
-      <Skeleton className="h-4 w-14" />
-      <Skeleton className="h-4 w-12" />
-    </div>
-  );
-}
+export function TopWallets({ cohort = "PROFIT", limit = 10, compact = false }: TopWalletsProps) {
+  const [wallets, setWallets] = useState<WalletStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCohort, setSelectedCohort] = useState(cohort);
 
-export function TopWallets({ wallets = [], loading = false, compact = false }: TopWalletsProps) {
-  const [activeCohort, setActiveCohort] = useState<string>("PROFIT");
+  const fetchWallets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ pnlCohort: selectedCohort, limit: String(limit) });
+      const res = await fetch(`/api/v1/cohorts/segment/${selectedCohort}?${params}`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // The segment endpoint returns { wallets: [...], stats: {...} }
+        const list = Array.isArray(data.wallets) ? data.wallets : [];
+        setWallets(list);
+      }
+    } catch {
+      setWallets([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCohort, limit]);
+
+  useEffect(() => {
+    fetchWallets();
+  }, [fetchWallets]);
 
   const cohorts = ["MONEY_PRINTER", "PROFIT", "BREAK_EVEN", "REKT", "GIGA_REKT"];
-
-  const filteredWallets = wallets.filter(
-    (w) => (w as { pnlCohort?: string }).pnlCohort === activeCohort
-  );
 
   return (
     <Card className="border-border/50">
@@ -158,7 +179,7 @@ export function TopWallets({ wallets = [], loading = false, compact = false }: T
         <div>
           <h3 className="font-semibold text-foreground">Top Wallets</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {loading ? "Loading..." : `${wallets.length} wallets tracked`}
+            {loading ? "Loading..." : `${wallets.length} wallets`}
           </p>
         </div>
         <Button
@@ -173,17 +194,17 @@ export function TopWallets({ wallets = [], loading = false, compact = false }: T
 
       {/* Cohort Tabs */}
       <div className="flex gap-1 px-4 pt-3 overflow-x-auto">
-        {cohorts.map((cohort) => (
+        {cohorts.map((c) => (
           <button
-            key={cohort}
-            onClick={() => setActiveCohort(cohort)}
+            key={c}
+            onClick={() => setSelectedCohort(c)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-              activeCohort === cohort
-                ? "bg-primary text-primary-foreground"
+              selectedCohort === c
+                ? `${COHORT_COLORS[c]} bg-opacity-20 font-semibold`
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
-            {COHORT_LABELS[cohort] ?? cohort}
+            {COHORT_LABELS[c] ?? c}
           </button>
         ))}
       </div>
@@ -209,12 +230,12 @@ export function TopWallets({ wallets = [], loading = false, compact = false }: T
             <SkeletonRow />
             <SkeletonRow />
           </>
-        ) : filteredWallets.length === 0 ? (
+        ) : wallets.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             No wallets in this cohort
           </div>
         ) : (
-          filteredWallets.map((wallet) => (
+          wallets.map((wallet) => (
             <WalletRow key={wallet.address} wallet={wallet} compact={compact} />
           ))
         )}

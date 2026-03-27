@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpDown, TrendingUp, Users, Activity, Wallet, ChevronRight, Layers } from "lucide-react";
+import { TopWallets } from "./components/top-wallets";
 
 const SEGMENTS = [
   {
@@ -255,6 +256,9 @@ export default function HypertrackerPage() {
         </div>
       </div>
 
+      {/* Top Wallets */}
+      <TopWallets limit={8} />
+
       {/* Cohort Overview */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -271,7 +275,7 @@ export default function HypertrackerPage() {
               BREAK_EVEN: { label: "Break Even", color: "text-yellow-500", bg: "bg-yellow-500/10" },
               REKT: { label: "Rekt", color: "text-red-500", bg: "bg-red-500/10" },
               GIGA_REKT: { label: "Giga Rekt", color: "text-purple-500", bg: "bg-purple-500/10" },
-            }[cohort];
+            }[cohort]!;
 
             return (
               <Link key={cohort} href={`/dashboard/cohorts/${cohort}`}>

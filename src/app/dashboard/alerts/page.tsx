@@ -15,33 +15,32 @@ import {
   XCircle,
   AlertTriangle,
 } from "lucide-react";
-import type { Alert } from "@/types/dashboard";
-import { useApi } from "@/hooks/use-api";
+import type { AlertRule } from "@/types/dashboard";
 
-type AlertWithName = Alert & { name?: string };
+function severityFromPriority(priority: number): string {
+  if (priority >= 90) return "critical";
+  if (priority >= 70) return "high";
+  if (priority >= 50) return "medium";
+  return "low";
+}
 
 function AlertCard({
   alert,
   onToggle,
   onDelete,
 }: {
-  alert: AlertWithName;
-  onToggle: (id: number, enabled: boolean) => void;
-  onDelete: (id: number) => void;
+  alert: AlertRule;
+  onToggle: (id: string, active: boolean) => void;
+  onDelete: (id: string) => void;
 }) {
+  const severity = severityFromPriority(alert.priority);
+
   const severityColor = {
     critical: "bg-red-500/10 text-red-500 border-red-500/20",
     high: "bg-orange-500/10 text-orange-500 border-orange-500/20",
     medium: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     low: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  }[alert.severity];
-
-  const severityIcon = {
-    critical: <AlertTriangle className="h-3.5 w-3.5" />,
-    high: <AlertTriangle className="h-3.5 w-3.5" />,
-    medium: <Bell className="h-3.5 w-3.5" />,
-    low: <Bell className="h-3.5 w-3.5" />,
-  }[alert.severity];
+  }[severity];
 
   return (
     <Card className="p-4 border-border/50 hover:border-border transition-colors">
@@ -50,15 +49,21 @@ function AlertCard({
           <div
             className={`mt-0.5 p-1.5 rounded-md border shrink-0 ${severityColor}`}
           >
-            {severityIcon}
+            {severity === "critical" || severity === "high" ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <Bell className="h-3.5 w-3.5" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="font-medium text-sm">{alert.name ?? `Alert #${alert.id}`}</h4>
+              <h4 className="font-medium text-sm">
+                {alert.name ?? `Alert #${alert.id.slice(0, 8)}`}
+              </h4>
               <Badge className={`text-[10px] px-1.5 py-0.5 border-0 ${severityColor}`}>
-                {alert.severity}
+                {severity}
               </Badge>
-              {alert.is_enabled ? (
+              {alert.is_active ? (
                 <span className="inline-flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">
                   <CheckCircle2 className="h-2.5 w-2.5" /> Active
                 </span>
@@ -68,10 +73,13 @@ function AlertCard({
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{alert.description}</p>
-            {alert.telegram_channel && (
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="font-medium">{alert.alert_type}</span>
+              {alert.target && <> · {alert.target}</>}
+            </p>
+            {alert.last_triggered && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                📢 {alert.telegram_channel}
+                Last triggered: {new Date(alert.last_triggered).toLocaleString()}
               </p>
             )}
           </div>
@@ -81,9 +89,9 @@ function AlertCard({
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0"
-            onClick={() => onToggle(alert.id, !alert.is_enabled)}
+            onClick={() => onToggle(alert.id, !alert.is_active)}
           >
-            {alert.is_enabled ? (
+            {alert.is_active ? (
               <XCircle className="h-4 w-4 text-muted-foreground" />
             ) : (
               <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -104,7 +112,7 @@ function AlertCard({
 }
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<AlertWithName[]>([]);
+  const [alerts, setAlerts] = useState<AlertRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -116,23 +124,24 @@ export default function AlertsPage() {
       const res = await fetch("/api/v1/alerts", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setAlerts(Array.isArray(data) ? data : []);
+        // AlertsResponse: { alerts: AlertRule[] } or AlertRule[]
+        setAlerts(Array.isArray(data) ? data : (data.alerts ?? []));
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const toggleAlert = useCallback(async (id: number, enabled: boolean) => {
+  const toggleAlert = useCallback(async (id: string, active: boolean) => {
     try {
       const res = await fetch(`/api/v1/alerts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_enabled: enabled }),
+        body: JSON.stringify({ is_active: active }),
       });
       if (res.ok) {
         setAlerts((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, is_enabled: enabled } : a))
+          prev.map((a) => (a.id === id ? { ...a, is_active: active } : a))
         );
       }
     } catch (e) {
@@ -140,7 +149,7 @@ export default function AlertsPage() {
     }
   }, []);
 
-  const deleteAlert = useCallback(async (id: number) => {
+  const deleteAlert = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/v1/alerts/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -178,8 +187,8 @@ export default function AlertsPage() {
     const q = search.toLowerCase();
     return (
       a.name?.toLowerCase().includes(q) ||
-      a.description?.toLowerCase().includes(q) ||
-      a.severity?.toLowerCase().includes(q)
+      a.alert_type?.toLowerCase().includes(q) ||
+      a.target?.toLowerCase().includes(q)
     );
   });
 
@@ -193,11 +202,7 @@ export default function AlertsPage() {
             Monitor wallet activity and get notified of significant changes
           </p>
         </div>
-        <Button
-          size="sm"
-          className="h-9"
-          onClick={() => setShowCreate((v) => !v)}
-        >
+        <Button size="sm" className="h-9" onClick={() => setShowCreate((v) => !v)}>
           <Plus className="h-4 w-4 mr-1" /> Create Alert
         </Button>
       </div>
@@ -212,21 +217,26 @@ export default function AlertsPage() {
               <Input placeholder="e.g. Whale Alert" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Severity</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Alert Type</label>
               <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                <option>critical</option>
-                <option>high</option>
-                <option>medium</option>
-                <option>low</option>
+                <option value="pnl_change">PnL Change</option>
+                <option value="position_size">Position Size</option>
+                <option value="new_wallet">New Wallet</option>
+                <option value="funding_rate">Funding Rate</option>
               </select>
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground mb-1 block">Description</label>
-              <Input placeholder="Describe the alert condition..." />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Priority</label>
+              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+                <option value={90}>Critical (90)</option>
+                <option value={70}>High (70)</option>
+                <option value={50}>Medium (50)</option>
+                <option value={30}>Low (30)</option>
+              </select>
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground mb-1 block">Wallet Address (optional)</label>
-              <Input placeholder="0x..." />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Target</label>
+              <Input placeholder="e.g. 0x... or ALL" />
             </div>
           </div>
           <div className="flex gap-2 mt-4">
