@@ -1,608 +1,302 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { z } from "zod";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useApiQuery } from "@/hooks/use-api-query";
-import { AlertRule, AlertHistoryResponse } from "@/types/dashboard";
-import { PageError } from "@/components/common/page-error";
-import { PageLoading } from "@/components/common/page-loading";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  Settings,
+  Bell,
+  Trash2,
+  Search,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from "lucide-react";
+import type { Alert } from "@/types/dashboard";
 import { useApi } from "@/hooks/use-api";
-import { useToast } from "@/components/providers/toast-provider";
 
-const PRIORITY_OPTIONS = [
-  { value: 1, label: "低优先级", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" },
-  { value: 2, label: "中优先级", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" },
-  { value: 3, label: "高优先级", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300" },
-];
+type AlertWithName = Alert & { name?: string };
 
-const ALERT_TYPE_OPTIONS = [
-  { value: "price_liquidation", label: "清算价格预警" },
-  { value: "funding_rate", label: "资金费率预警" },
-  { value: "wallet_trade", label: "钱包交易预警" },
-  { value: "big_trade", label: "大额交易预警" },
-];
+function AlertCard({
+  alert,
+  onToggle,
+  onDelete,
+}: {
+  alert: AlertWithName;
+  onToggle: (id: number, enabled: boolean) => void;
+  onDelete: (id: number) => void;
+}) {
+  const severityColor = {
+    critical: "bg-red-500/10 text-red-500 border-red-500/20",
+    high: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+    medium: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+    low: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  }[alert.severity];
 
-const createAlertSchema = z.object({
-  name: z.string().trim().max(100, "规则名称不能超过 100 个字符").optional(),
-  alert_type: z.string().min(1, "请选择告警类型"),
-  target: z.string().trim().min(1, "请输入监控目标").max(200, "监控目标不能超过 200 个字符"),
-  condition: z.string().trim().min(4, "触发条件至少 4 个字符"),
-  priority: z.coerce.number().min(1).max(3),
-});
+  const severityIcon = {
+    critical: <AlertTriangle className="h-3.5 w-3.5" />,
+    high: <AlertTriangle className="h-3.5 w-3.5" />,
+    medium: <Bell className="h-3.5 w-3.5" />,
+    low: <Bell className="h-3.5 w-3.5" />,
+  }[alert.severity];
 
-interface TelegramStatus {
-  bound: boolean;
-  username?: string;
-  chatId?: number;
-  verificationCode?: string;
-  botUsername?: string;
-}
-
-function PriorityBadge({ priority }: { priority: number }) {
-  const opt = PRIORITY_OPTIONS.find((p) => p.value === priority) ?? PRIORITY_OPTIONS[0];
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${opt.color}`}>
-      {opt.label}
-    </span>
+    <Card className="p-4 border-border/50 hover:border-border transition-colors">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div
+            className={`mt-0.5 p-1.5 rounded-md border shrink-0 ${severityColor}`}
+          >
+            {severityIcon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-medium text-sm">{alert.name ?? `Alert #${alert.id}`}</h4>
+              <Badge className={`text-[10px] px-1.5 py-0.5 border-0 ${severityColor}`}>
+                {alert.severity}
+              </Badge>
+              {alert.is_enabled ? (
+                <span className="inline-flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> Active
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  <XCircle className="h-2.5 w-2.5" /> Paused
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{alert.description}</p>
+            {alert.telegram_channel && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                📢 {alert.telegram_channel}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => onToggle(alert.id, !alert.is_enabled)}
+          >
+            {alert.is_enabled ? (
+              <XCircle className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 hover:text-red-500"
+            onClick={() => onDelete(alert.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
 export default function AlertsPage() {
-  const { request, loading: actionLoading } = useApi();
-  const { pushToast } = useToast();
+  const [alerts, setAlerts] = useState<AlertWithName[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [telegramChannel, setTelegramChannel] = useState("");
 
-  // Form state
-  const [name, setName] = useState("");
-  const [alertType, setAlertType] = useState("price_liquidation");
-  const [target, setTarget] = useState("");
-  const [condition, setCondition] = useState("");
-  const [priority, setPriority] = useState(1);
+  const fetchAlerts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/v1/alerts", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setAlerts(Array.isArray(data) ? data : []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Telegram
-  const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
-  const [loadingTelegram, setLoadingTelegram] = useState(false);
+  const toggleAlert = useCallback(async (id: number, enabled: boolean) => {
+    try {
+      const res = await fetch(`/api/v1/alerts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_enabled: enabled }),
+      });
+      if (res.ok) {
+        setAlerts((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, is_enabled: enabled } : a))
+        );
+      }
+    } catch (e) {
+      console.error("Failed to toggle alert", e);
+    }
+  }, []);
 
-  // Active tab: "rules" | "history"
-  const [activeTab, setActiveTab] = useState<"rules" | "history">("rules");
-  // Expanded alert for history
-  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
-  const [history, setHistory] = useState<AlertHistoryResponse | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const deleteAlert = useCallback(async (id: number) => {
+    try {
+      const res = await fetch(`/api/v1/alerts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setAlerts((prev) => prev.filter((a) => a.id !== id));
+      }
+    } catch (e) {
+      console.error("Failed to delete alert", e);
+    }
+  }, []);
 
-  const { data: alerts, loading, error, refetch } = useApiQuery<AlertRule[]>("/alerts", {
-    staleTimeMs: 10_000,
-    pollingIntervalMs: 15_000,
+  const bindTelegram = useCallback(async () => {
+    if (!telegramChannel.trim()) return;
+    try {
+      const res = await fetch("/api/v1/alerts/bind-telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: telegramChannel }),
+      });
+      if (res.ok) {
+        alert("Telegram channel bound successfully!");
+        setTelegramChannel("");
+      } else {
+        alert("Failed to bind Telegram channel");
+      }
+    } catch (e) {
+      console.error("Failed to bind Telegram", e);
+    }
+  }, [telegramChannel]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const filtered = alerts.filter((a) => {
+    const q = search.toLowerCase();
+    return (
+      a.name?.toLowerCase().includes(q) ||
+      a.description?.toLowerCase().includes(q) ||
+      a.severity?.toLowerCase().includes(q)
+    );
   });
 
-  // Fetch Telegram status
-  useEffect(() => {
-    const fetchTelegramStatus = async () => {
-      try {
-        const status = await request<TelegramStatus>({
-          path: "/alerts/telegram/status",
-          method: "GET",
-        });
-        setTelegramStatus(status);
-      } catch (err) {
-        console.error("Failed to fetch Telegram status:", err);
-      }
-    };
-    fetchTelegramStatus();
-  }, [request]);
-
-  const onCreateRule = async () => {
-    const parsed = createAlertSchema.safeParse({
-      name: name || undefined,
-      alert_type: alertType,
-      target,
-      condition,
-      priority,
-    });
-    if (!parsed.success) {
-      pushToast(parsed.error.issues[0]?.message ?? "请输入有效的规则参数", "error");
-      return;
-    }
-
-    let conditionObj: Record<string, unknown>;
-    try {
-      conditionObj = JSON.parse(parsed.data.condition);
-    } catch {
-      pushToast("触发条件必须是合法的 JSON 格式", "error");
-      return;
-    }
-
-    try {
-      await request({
-        path: "/alerts",
-        method: "POST",
-        body: JSON.stringify({
-          name: parsed.data.name ?? null,
-          alert_type: parsed.data.alert_type,
-          target: parsed.data.target,
-          condition: conditionObj,
-          channel: "telegram",
-          priority: parsed.data.priority,
-        }),
-      });
-      setName("");
-      setTarget("");
-      setCondition("");
-      setPriority(1);
-      pushToast("告警规则已创建");
-      await refetch();
-    } catch (e) {
-      pushToast((e as Error).message || "创建失败", "error");
-    }
-  };
-
-  const onToggleRule = async (id: string, isActive: boolean) => {
-    try {
-      await request({
-        path: `/alerts/${id}`,
-        method: "PATCH",
-        body: JSON.stringify({ is_active: !isActive }),
-      });
-      pushToast(isActive ? "规则已停用" : "规则已启用");
-      await refetch();
-    } catch (e) {
-      pushToast((e as Error).message || "操作失败", "error");
-    }
-  };
-
-  const onUpdatePriority = async (id: string, newPriority: number) => {
-    try {
-      await request({
-        path: `/alerts/${id}`,
-        method: "PATCH",
-        body: JSON.stringify({ priority: newPriority }),
-      });
-      pushToast("优先级已更新");
-      await refetch();
-    } catch (e) {
-      pushToast((e as Error).message || "更新失败", "error");
-    }
-  };
-
-  const onDeleteRule = async (id: string) => {
-    try {
-      await request({
-        path: `/alerts/${id}`,
-        method: "DELETE",
-      });
-      pushToast("规则已删除");
-      await refetch();
-    } catch (e) {
-      pushToast((e as Error).message || "删除失败", "error");
-    }
-  };
-
-  const onToggleHistory = async (alertId: string) => {
-    if (expandedAlertId === alertId) {
-      setExpandedAlertId(null);
-      setHistory(null);
-      return;
-    }
-    setExpandedAlertId(alertId);
-    setLoadingHistory(true);
-    try {
-      const data = await request<AlertHistoryResponse>({
-        path: `/alerts/${alertId}/history`,
-        method: "GET",
-      });
-      setHistory(data);
-    } catch (e) {
-      pushToast((e as Error).message || "获取历史记录失败", "error");
-      setExpandedAlertId(null);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  const onTestTelegram = async () => {
-    setLoadingTelegram(true);
-    try {
-      await request({
-        path: "/alerts/telegram/test",
-        method: "POST",
-      });
-      pushToast("测试消息已发送到 Telegram");
-    } catch (e) {
-      pushToast((e as Error).message || "发送失败", "error");
-    } finally {
-      setLoadingTelegram(false);
-    }
-  };
-
-  const onUnbindTelegram = async () => {
-    setLoadingTelegram(true);
-    try {
-      await request({
-        path: "/alerts/telegram/unbind",
-        method: "DELETE",
-      });
-      pushToast("Telegram 账号已解绑");
-      const status = await request<TelegramStatus>({
-        path: "/alerts/telegram/status",
-        method: "GET",
-      });
-      setTelegramStatus(status);
-    } catch (e) {
-      pushToast((e as Error).message || "解绑失败", "error");
-    } finally {
-      setLoadingTelegram(false);
-    }
-  };
-
-  if (loading && !alerts) return <PageLoading />;
-  if (error && !alerts) return <PageError message={error.message} onRetry={refetch} />;
-
   return (
-    <div className="space-y-4">
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">告警配置</h1>
-        <div className="flex gap-1 rounded-lg border border-border bg-muted p-1">
-          <button
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              activeTab === "rules"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("rules")}
-          >
-            告警规则
-          </button>
-          <button
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              activeTab === "history"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("history")}
-          >
-            触发历史
-          </button>
+        <div>
+          <h1 className="text-2xl font-bold">Alert Rules</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Monitor wallet activity and get notified of significant changes
+          </p>
         </div>
+        <Button
+          size="sm"
+          className="h-9"
+          onClick={() => setShowCreate((v) => !v)}
+        >
+          <Plus className="h-4 w-4 mr-1" /> Create Alert
+        </Button>
       </div>
 
-      {/* Telegram 绑定卡片 */}
-      <Card className="space-y-3">
-        <h2 className="font-medium">Telegram 通知</h2>
-        {telegramStatus?.bound ? (
-          <div className="space-y-3">
-            <div className="rounded-md border border-green-500/20 bg-green-500/10 p-3">
-              <p className="text-sm text-green-600 dark:text-green-400">
-                ✅ 已绑定 Telegram 账号
-                {telegramStatus.username && ` (@${telegramStatus.username})`}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={onTestTelegram} disabled={loadingTelegram}>
-                发送测试消息
-              </Button>
-              <Button size="sm" variant="outline" onClick={onUnbindTelegram} disabled={loadingTelegram}>
-                解绑账号
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              绑定 Telegram 账号后，您将通过 Telegram 接收告警通知
-            </p>
-            {telegramStatus?.verificationCode && (
-              <div className="rounded-md border border-border bg-muted p-4 space-y-2">
-                <p className="text-sm font-medium">绑定步骤：</p>
-                <ol className="space-y-1 list-decimal list-inside text-sm text-muted-foreground">
-                  <li>
-                    在 Telegram 中搜索并打开 Bot：
-                    <code className="bg-background px-1 py-0.5 rounded ml-1">
-                      @{telegramStatus.botUsername || "YourBot"}
-                    </code>
-                  </li>
-                  <li>点击「Start」按钮启动对话</li>
-                  <li>发送以下验证码：</li>
-                </ol>
-                <div className="flex items-center gap-2 mt-2">
-                  <code className="flex-1 bg-background px-3 py-2 rounded text-lg font-mono tracking-wider">
-                    {telegramStatus.verificationCode}
-                  </code>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(telegramStatus.verificationCode!);
-                      pushToast("验证码已复制");
-                    }}
-                  >
-                    复制
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">验证码有效期：10分钟</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {activeTab === "rules" ? (
-        <>
-          {/* 创建规则表单 */}
-          <Card className="space-y-3">
-            <h2 className="font-medium">新建告警规则</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm text-muted-foreground">规则名称（可选）</label>
-                <input
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  placeholder="例如：BTC 清算预警"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-muted-foreground">告警类型</label>
-                <select
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  value={alertType}
-                  onChange={(e) => setAlertType(e.target.value)}
-                >
-                  {ALERT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-muted-foreground">监控目标</label>
-                <input
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  placeholder="例如：BTC/USDT 或 0x..."
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-muted-foreground">优先级</label>
-                <select
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  value={priority}
-                  onChange={(e) => setPriority(Number(e.target.value))}
-                >
-                  {PRIORITY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {/* Create Form */}
+      {showCreate && (
+        <Card className="p-5 border-border/50">
+          <h3 className="font-semibold mb-4">Create New Alert</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Alert Name</label>
+              <Input placeholder="e.g. Whale Alert" />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-muted-foreground">触发条件（JSON）</label>
-              <textarea
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
-                placeholder={'{"threshold": 0.03, "direction": "above"}'}
-                rows={3}
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-              />
+              <label className="text-xs text-muted-foreground mb-1 block">Severity</label>
+              <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+                <option>critical</option>
+                <option>high</option>
+                <option>medium</option>
+                <option>low</option>
+              </select>
             </div>
-            <Button onClick={onCreateRule} disabled={actionLoading}>
-              新建规则
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Description</label>
+              <Input placeholder="Describe the alert condition..." />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Wallet Address (optional)</label>
+              <Input placeholder="0x..." />
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <Button size="sm" className="h-8">Create</Button>
+            <Button variant="outline" size="sm" className="h-8" onClick={() => setShowCreate(false)}>
+              Cancel
             </Button>
-          </Card>
-
-          {/* 规则列表 */}
-          <div className="space-y-2">
-            {(alerts ?? []).length === 0 ? (
-              <Card className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-muted-foreground">暂无告警规则</p>
-                <p className="mt-1 text-sm text-muted-foreground">创建第一条告警规则开始监控</p>
-              </Card>
-            ) : (
-              (alerts ?? []).map((rule) => (
-                <Card key={rule.id} className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium truncate">{rule.name || rule.target}</p>
-                        <PriorityBadge priority={rule.priority} />
-                        <span
-                          className={`text-xs px-1.5 py-0.5 rounded ${
-                            rule.is_active
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                              : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-                          }`}
-                        >
-                          {rule.is_active ? "已启用" : "已停用"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {rule.alert_type} · {rule.target}
-                      </p>
-                      <p className="mt-1 text-xs font-mono text-muted-foreground">
-                        {JSON.stringify(rule.condition)}
-                      </p>
-                      {rule.last_triggered && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          最近触发：{new Date(rule.last_triggered).toLocaleString("zh-CN")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading}
-                        onClick={() => onToggleRule(rule.id, rule.is_active)}
-                      >
-                        {rule.is_active ? "停用" : "启用"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading}
-                        onClick={() => onToggleHistory(rule.id)}
-                      >
-                        {expandedAlertId === rule.id ? "收起" : "历史"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading}
-                        onClick={() => onDeleteRule(rule.id)}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* 历史记录展开区 */}
-                  {expandedAlertId === rule.id && (
-                    <div className="border-t border-border pt-3">
-                      {loadingHistory ? (
-                        <p className="text-sm text-muted-foreground py-2">加载中...</p>
-                      ) : history && history.history.length > 0 ? (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-muted-foreground">
-                            触发历史（共 {history.total} 条）
-                          </p>
-                          {history.history.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/50 p-2"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm truncate">{item.message}</p>
-                                {item.payload && (
-                                  <p className="mt-0.5 text-xs font-mono text-muted-foreground truncate">
-                                    {JSON.stringify(item.payload)}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="text-xs text-muted-foreground flex-shrink-0">
-                                {new Date(item.triggeredAt).toLocaleString("zh-CN")}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground py-2">暂无触发记录</p>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              ))
-            )}
           </div>
-        </>
-      ) : (
-        /* 历史总览 */
-        <AlertHistoryOverview alerts={alerts ?? []} request={request} pushToast={pushToast} />
+        </Card>
       )}
-    </div>
-  );
-}
 
-// 触发历史总览组件
-function AlertHistoryOverview({
-  alerts,
-  request,
-  pushToast,
-}: {
-  alerts: AlertRule[];
-  request: ReturnType<typeof useApi>["request"];
-  pushToast: ReturnType<typeof useToast>["pushToast"];
-}) {
-  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
-  const [history, setHistory] = useState<AlertHistoryResponse | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-
-  const onSelectAlert = async (alertId: string) => {
-    if (selectedAlertId === alertId) {
-      setSelectedAlertId(null);
-      setHistory(null);
-      return;
-    }
-    setSelectedAlertId(alertId);
-    setLoadingHistory(true);
-    try {
-      const data = await request<AlertHistoryResponse>({
-        path: `/alerts/${alertId}/history`,
-        method: "GET",
-      });
-      setHistory(data);
-    } catch (e) {
-      pushToast((e as Error).message || "获取历史记录失败", "error");
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  if (alerts.length === 0) {
-    return (
-      <Card className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-muted-foreground">暂无告警规则</p>
+      {/* Telegram Binding */}
+      <Card className="p-4 border-border/50">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-medium text-sm">Telegram Notifications</h3>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Telegram channel name or ID"
+            value={telegramChannel}
+            onChange={(e) => setTelegramChannel(e.target.value)}
+            className="h-9 max-w-sm"
+          />
+          <Button variant="outline" size="sm" className="h-9" onClick={bindTelegram}>
+            Bind Channel
+          </Button>
+        </div>
       </Card>
-    );
-  }
 
-  return (
-    <Card className="space-y-3">
-      <h2 className="font-medium">告警触发历史</h2>
-      <div className="space-y-1">
-        {alerts.map((alert) => (
-          <div key={alert.id}>
-            <button
-              className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                selectedAlertId === alert.id
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border hover:bg-muted/50"
-              }`}
-              onClick={() => onSelectAlert(alert.id)}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="truncate font-medium">{alert.name || alert.target}</span>
-                <PriorityBadge priority={alert.priority} />
-              </div>
-              <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                {selectedAlertId === alert.id ? "▲ 收起" : "▼ 查看"}
-              </span>
-            </button>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search alerts..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 max-w-sm"
+        />
+      </div>
 
-            {selectedAlertId === alert.id && (
-              <div className="mt-1 space-y-1 pl-2">
-                {loadingHistory ? (
-                  <p className="py-3 text-center text-sm text-muted-foreground">加载中...</p>
-                ) : history && history.history.length > 0 ? (
-                  history.history.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-2"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{item.message}</p>
-                        {item.payload && (
-                          <p className="mt-0.5 text-xs font-mono text-muted-foreground truncate">
-                            {JSON.stringify(item.payload)}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {new Date(item.triggeredAt).toLocaleString("zh-CN")}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="py-3 text-center text-sm text-muted-foreground">暂无触发记录</p>
-                )}
-              </div>
+      {/* Alert List */}
+      <div className="space-y-3">
+        {loading ? (
+          <div className="text-center py-12 text-sm text-muted-foreground">
+            Loading alerts...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {search ? "No alerts match your search" : "No alerts configured yet"}
+            </p>
+            {!search && (
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowCreate(true)}>
+                Create your first alert
+              </Button>
             )}
           </div>
-        ))}
+        ) : (
+          filtered.map((alert) => (
+            <AlertCard
+              key={alert.id}
+              alert={alert}
+              onToggle={toggleAlert}
+              onDelete={deleteAlert}
+            />
+          ))
+        )}
       </div>
-    </Card>
+    </div>
   );
 }

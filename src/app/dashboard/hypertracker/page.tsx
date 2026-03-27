@@ -1,135 +1,291 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { TrendingUp, Users, BarChart3, ArrowRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowUpDown, TrendingUp, Users, Activity, Wallet, ChevronRight, Layers } from "lucide-react";
+
+const SEGMENTS = [
+  {
+    id: "whale-tracker",
+    label: "Whale Tracker",
+    description: "Track large position changes and wallet movements",
+    href: "/dashboard/segments/whale-tracker",
+    icon: TrendingUp,
+    color: "text-blue-500",
+    bgColor: "bg-blue-500/10",
+    badge: "Live",
+    badgeColor: "bg-blue-500/10 text-blue-500",
+  },
+  {
+    id: "momentum-tracker",
+    label: "Momentum Tracker",
+    description: "Follow wallets with strong directional trades",
+    href: "/dashboard/segments/momentum-tracker",
+    icon: Activity,
+    bgColor: "bg-purple-500/10",
+    color: "text-purple-500",
+    badge: "New",
+    badgeColor: "bg-purple-500/10 text-purple-500",
+  },
+  {
+    id: "money-printer",
+    label: "Money Printer",
+    description: "Wallets with consistent profitable trades",
+    href: "/dashboard/segments/money-printer",
+    icon: Wallet,
+    bgColor: "bg-green-500/10",
+    color: "text-green-500",
+  },
+  {
+    id: "defi-trends",
+    label: "DeFi Trends",
+    description: "Monitor DeFi protocol interactions",
+    href: "/dashboard/segments/defi-trends",
+    icon: Layers,
+    bgColor: "bg-orange-500/10",
+    color: "text-orange-500",
+  },
+];
+
+type Stat = {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ElementType;
+  color: string;
+  bgColor: string;
+};
+
+type StatsState = {
+  totalWallets: number;
+  totalPnl: number;
+  avgWinRate: number;
+  totalVolume: number;
+};
+
+function StatCard({ stat, loading }: { stat: Stat; loading?: boolean }) {
+  const Icon = stat.icon;
+  return (
+    <Card className="p-4 border-border/50">
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`p-1.5 rounded-md ${stat.bgColor}`}>
+              <Icon className={`h-4 w-4 ${stat.color}`} />
+            </div>
+            <span className="text-xs text-muted-foreground">{stat.label}</span>
+          </div>
+          <div className="text-2xl font-bold">{stat.value}</div>
+          {stat.sub && (
+            <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
 
 export default function HypertrackerPage() {
+  const [stats, setStats] = useState<StatsState>({
+    totalWallets: 0,
+    totalPnl: 0,
+    avgWinRate: 0,
+    totalVolume: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const [overviewRes, leaderboardRes] = await Promise.all([
+          fetch("/api/v1/cohorts/overview", { cache: "no-store" }),
+          fetch("/api/v1/wallets/leaderboard?page=1&pageSize=1&sortBy=total_pnl", { cache: "no-store" }),
+        ]);
+
+        if (overviewRes.ok && leaderboardRes.ok) {
+          const overview = await overviewRes.json();
+          const leaderboard = await leaderboardRes.json();
+
+          // Sum wallet counts across all cohorts
+          const cohorts = ["MONEY_PRINTER", "PROFIT", "BREAK_EVEN", "REKT", "GIGA_REKT"];
+          let totalWallets = 0;
+          let totalPnl = 0;
+          let totalVolume = 0;
+
+          for (const cohort of cohorts) {
+            const c = overview[cohort];
+            if (c?.walletCount) totalWallets += c.walletCount;
+            if (c?.avgPnl) totalPnl += (c.avgPnl * c.walletCount);
+            if (c?.totalVolume) totalVolume += c.totalVolume;
+          }
+
+          setStats({
+            totalWallets: totalWallets || leaderboard.total || 0,
+            totalPnl,
+            avgWinRate: 0,
+            totalVolume,
+          });
+        }
+      } catch (e) {
+        // silent fail, keep defaults
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStats();
+  }, []);
+
+  const statCards: Stat[] = [
+    {
+      label: "Tracked Wallets",
+      value: loading ? "-" : stats.totalWallets.toLocaleString(),
+      icon: Users,
+      color: "text-blue-500",
+      bgColor: "bg-blue-500/10",
+    },
+    {
+      label: "Total PnL",
+      value: loading
+        ? "-"
+        : `${stats.totalPnl >= 0 ? "+" : ""}$${(stats.totalPnl / 1000).toFixed(1)}K`,
+      sub: "Across all cohorts",
+      icon: TrendingUp,
+      color: stats.totalPnl >= 0 ? "text-green-500" : "text-red-500",
+      bgColor: stats.totalPnl >= 0 ? "bg-green-500/10" : "bg-red-500/10",
+    },
+    {
+      label: "Volume (30d)",
+      value: loading
+        ? "-"
+        : stats.totalVolume >= 1_000_000
+        ? `$${(stats.totalVolume / 1_000_000).toFixed(1)}M`
+        : stats.totalVolume >= 1_000
+        ? `$${(stats.totalVolume / 1_000).toFixed(1)}K`
+        : `$${stats.totalVolume.toFixed(0)}`,
+      sub: "Total trading volume",
+      icon: Activity,
+      color: "text-purple-500",
+      bgColor: "bg-purple-500/10",
+    },
+    {
+      label: "Avg Win Rate",
+      value: loading ? "-" : `${(stats.avgWinRate * 100).toFixed(1)}%`,
+      sub: "Across all wallets",
+      icon: Wallet,
+      color: "text-orange-500",
+      bgColor: "bg-orange-500/10",
+    },
+  ];
+
   return (
-    <div className="p-6 space-y-8">
-      {/* Header */}
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Hypertracker</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Monitor wallet segments and track top traders on Hyperliquid
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/dashboard/leaderboard">
+            <Button variant="outline" size="sm" className="h-9">
+              Leaderboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/segments">
+            <Button size="sm" className="h-9">
+              Segments
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((stat) => (
+          <StatCard key={stat.label} stat={stat} loading={loading} />
+        ))}
+      </div>
+
+      {/* Segment Cards */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Hypertracker</h1>
-        <p className="text-muted-foreground mt-1">
-          追踪聪明钱动向，发现 money printer 钱包
-        </p>
-      </div>
-
-      {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-500/10 p-2">
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Money Printers</p>
-              <p className="text-2xl font-semibold">+100%+ PnL</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            30天内收益超过100%的钱包
-          </p>
-        </div>
-
-        <div className="rounded-xl border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-green-500/10 p-2">
-              <TrendingUp className="h-5 w-5 text-green-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Profit</p>
-              <p className="text-2xl font-semibold">+10%~100% PnL</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            10% - 100% 收益区间的钱包
-          </p>
-        </div>
-
-        <div className="rounded-xl border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-500/10 p-2">
-              <TrendingUp className="h-5 w-5 text-red-500 rotate-180" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Rekt</p>
-              <p className="text-2xl font-semibold">-50%~-10% PnL</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            亏损 10% - 50% 的钱包
-          </p>
-        </div>
-
-        <div className="rounded-xl border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-red-600/10 p-2">
-              <TrendingUp className="h-5 w-5 text-red-600 rotate-180" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Giga Rekt</p>
-              <p className="text-2xl font-semibold">&lt;-50% PnL</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            亏损超过 50% 的钱包
-          </p>
+        <h2 className="text-lg font-semibold mb-3">Segments</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {SEGMENTS.map((segment) => {
+            const Icon = segment.icon;
+            return (
+              <Link key={segment.id} href={segment.href}>
+                <Card className="p-5 border-border/50 hover:border-primary/30 transition-colors cursor-pointer group">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-lg ${segment.bgColor}`}>
+                        <Icon className={`h-5 w-5 ${segment.color}`} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{segment.label}</h3>
+                          {segment.badge && (
+                            <Badge className={`text-[10px] px-1.5 py-0.5 ${segment.badgeColor}`}>
+                              {segment.badge}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {segment.description}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors mt-1" />
+                  </div>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
-      {/* Navigation Cards */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Link
-          href="/dashboard/segments"
-          className="group rounded-xl border bg-card p-6 hover:border-primary/50 hover:bg-card/80 transition-all"
-        >
-          <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-primary/10 p-3">
-              <Users className="h-6 w-6 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold">Segments</h3>
-              <p className="text-sm text-muted-foreground">
-                按盈亏分组查看钱包分布
-              </p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
-          </div>
-        </Link>
+      {/* Cohort Overview */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Cohort Overview</h2>
+          <Link href="/dashboard/segments" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            View Details →
+          </Link>
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {["MONEY_PRINTER", "PROFIT", "BREAK_EVEN", "REKT", "GIGA_REKT"].map((cohort) => {
+            const cohortData = {
+              MONEY_PRINTER: { label: "Money Printer", color: "text-green-500", bg: "bg-green-500/10" },
+              PROFIT: { label: "Profit", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+              BREAK_EVEN: { label: "Break Even", color: "text-yellow-500", bg: "bg-yellow-500/10" },
+              REKT: { label: "Rekt", color: "text-red-500", bg: "bg-red-500/10" },
+              GIGA_REKT: { label: "Giga Rekt", color: "text-purple-500", bg: "bg-purple-500/10" },
+            }[cohort];
 
-        <Link
-          href="/dashboard/leaderboard"
-          className="group rounded-xl border bg-card p-6 hover:border-primary/50 hover:bg-card/80 transition-all"
-        >
-          <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-primary/10 p-3">
-              <BarChart3 className="h-6 w-6 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold">Smart Money 排行榜</h3>
-              <p className="text-sm text-muted-foreground">
-                按 Score 排序的钱包榜单
-              </p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
-          </div>
-        </Link>
-      </div>
-
-      {/* How it Works */}
-      <div className="rounded-xl border bg-card p-6">
-        <h2 className="font-semibold mb-4">如何划分 Segments？</h2>
-        <div className="grid gap-3 md:grid-cols-5">
-          {[
-            { label: "Money Printer", desc: "PnL > +100%", color: "text-amber-500" },
-            { label: "Profit", desc: "PnL +10% ~ +100%", color: "text-green-500" },
-            { label: "Break Even", desc: "PnL -10% ~ +10%", color: "text-gray-400" },
-            { label: "Rekt", desc: "PnL -50% ~ -10%", color: "text-red-500" },
-            { label: "Giga Rekt", desc: "PnL < -50%", color: "text-red-600" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className={`font-medium text-sm ${item.color}`}>{item.label}</p>
-              <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
-            </div>
-          ))}
+            return (
+              <Link key={cohort} href={`/dashboard/cohorts/${cohort}`}>
+                <Card className={`p-4 border-border/50 hover:border-primary/30 transition-colors cursor-pointer text-center group ${cohortData.bg}`}>
+                  <div className={`font-semibold text-sm ${cohortData.color}`}>
+                    {cohortData.label}
+                  </div>
+                  <div className="text-2xl font-bold mt-2 group-hover:text-primary transition-colors">
+                    →
+                  </div>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
