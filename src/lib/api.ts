@@ -1,4 +1,5 @@
 import { AUTH_COOKIE_NAME, clearAccessTokenCookie, setAccessTokenCookie } from "@/lib/auth";
+import { emitToast } from "@/lib/toast-store";
 
 const API_BASE_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL ?? "");
 const API_PREFIX = "/api/v1";
@@ -73,6 +74,24 @@ export async function apiFetch<T>({ path, retryOnAuthError = true, signal, ...co
 
   if (response.status === 403) {
     throw new Error("无权限访问该资源");
+  }
+
+  if (response.status === 429) {
+    const clonedResponse = response.clone();
+    const text = await clonedResponse.text();
+    let message = "请求过于频繁，请稍后再试";
+    try {
+      const payload = JSON.parse(text) as { error?: string; detail?: string };
+      if (payload.error) message = payload.error;
+      else if (payload.detail) message = payload.detail;
+    } catch {
+      message = text || message;
+    }
+    // Show toast notification for rate limit errors
+    if (typeof window !== "undefined") {
+      emitToast(message, "error");
+    }
+    throw new Error(message);
   }
 
   if (!response.ok) {

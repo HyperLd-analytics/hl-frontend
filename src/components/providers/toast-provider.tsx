@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { registerToastCallback } from "@/lib/toast-store";
 
 type ToastItem = {
   id: string;
@@ -17,6 +18,16 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  useEffect(() => {
+    return registerToastCallback((title, variant) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setToasts((prev) => [...prev, { id, title, variant }]);
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 2500);
+    });
+  }, []);
 
   const pushToast = useCallback((title: string, variant: "default" | "error" = "default") => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
