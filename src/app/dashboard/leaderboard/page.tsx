@@ -1,265 +1,294 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
-import { useApiQuery } from "@/hooks/use-api-query";
-import { LeaderboardResponse } from "@/types/dashboard";
-import { PageError } from "@/components/common/page-error";
-import { PageLoading } from "@/components/common/page-loading";
-import { TableLoading } from "@/components/common/table-loading";
+import { useState } from "react";
+import useSWR from "swr";
+import { Trophy, TrendingUp, TrendingDown, BarChart2, ChevronUp, ChevronDown } from "lucide-react";
 
-type TimeRange = "1h" | "24h" | "7d" | "30d" | "all";
+interface LeaderboardEntry {
+  rank: number;
+  wallet_id: number;
+  wallet_address: string;
+  pnl: number;
+  pnl_percent: number;
+  volume_usd: number;
+  win_rate: number;
+  trades: number;
+}
 
-const TIME_RANGES: { label: string; value: TimeRange }[] = [
-  { label: "1H", value: "1h" },
-  { label: "24H", value: "24h" },
-  { label: "7D", value: "7d" },
-  { label: "30D", value: "30d" },
-  { label: "All", value: "all" },
+interface LeaderboardResponse {
+  period: string;
+  entries: LeaderboardEntry[];
+  total: number;
+}
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const PERIODS = [
+  { label: "24小时", value: "24h" },
+  { label: "7天", value: "7d" },
+  { label: "30天", value: "30d" },
+  { label: "全部", value: "all" },
 ];
 
-function formatPnl(value: number | undefined | null): string {
-  if (value == null) return "-";
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
-}
-
-function formatLastActive(lastActive: string | undefined): string {
-  if (!lastActive) return "-";
-  try {
-    const date = new Date(lastActive);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  } catch {
-    return "-";
-  }
-}
-
 export default function LeaderboardPage() {
-  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [sortBy, setSortBy] = useState<"score" | "total_pnl" | "win_rate" | "volume_30d" | "lifetime_trade_count">("score");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [search, setSearch] = useState("");
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [period, setPeriod] = useState("7d");
+  const [selectedWallets, setSelectedWallets] = useState<Set<number>>(new Set());
 
-  const queryPath = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("pageSize", String(pageSize));
-    params.set("sortBy", sortBy);
-    params.set("sortDir", sortDir);
-    params.set("timeRange", timeRange);
-    if (search.trim()) params.set("search", search.trim());
-    return `/wallets/leaderboard?${params.toString()}`;
-  }, [page, pageSize, sortBy, sortDir, timeRange, search]);
+  const { data, error, isLoading } = useSWR<LeaderboardResponse>(
+    `/api/v1/leaderboard?period=${period}`,
+    fetcher
+  );
 
-  const { data, loading, error, refetch } = useApiQuery<LeaderboardResponse>(queryPath, {
-    debounceMs: 250,
-    staleTimeMs: 10_000,
-    pollingIntervalMs: 30_000,
-  });
-
-  const totalPages = Math.max(1, Math.ceil((data?.pagination?.total ?? 0) / (data?.pagination?.pageSize ?? pageSize)));
-
-  const handleTimeRangeChange = (range: TimeRange) => {
-    setTimeRange(range);
-    setPage(1);
+  const toggleWallet = (id: number) => {
+    const next = new Set(selectedWallets);
+    if (next.has(id)) next.delete(id);
+    else if (next.size < 5) next.add(id);
+    setSelectedWallets(next);
   };
 
-  // Auto-refresh every 30s when enabled
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      void refetch();
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, refetch]);
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+        <div className="h-96 animate-pulse rounded-xl bg-muted" />
+      </div>
+    );
+  }
 
-  if (loading && !data) return <PageLoading />;
-  if (error && !data) return <PageError message={error.message} onRetry={refetch} />;
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">
+          <p className="font-medium">加载失败</p>
+          <p className="text-sm mt-1">请稍后刷新页面重试</p>
+        </div>
+      </div>
+    );
+  }
+
+  const entries = data?.entries || [];
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Smart Money 排行榜</h1>
-        <div className="flex items-center gap-3">
-          {autoRefresh && (
-            <span className="text-xs text-muted-foreground animate-pulse">Auto-refresh: ON</span>
-          )}
-          <Button
-            size="sm"
-            variant={autoRefresh ? "default" : "outline"}
-            onClick={() => setAutoRefresh((v) => !v)}
-          >
-            {autoRefresh ? "⟳ On" : "⟳ Off"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void refetch()}>
-            ↻
-          </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">钱包排行榜</h1>
+          <p className="text-muted-foreground mt-1">
+            按 {PERIODS.find((p) => p.value === period)?.label} 收益排序
+          </p>
+        </div>
+
+        {/* 周期选择 */}
+        <div className="flex rounded-lg border bg-card p-1 gap-1">
+          {PERIODS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                period === p.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Time Filter Tabs */}
-      <Card className="p-1 inline-flex items-center gap-1">
-        {TIME_RANGES.map((range) => (
-          <button
-            key={range.value}
-            onClick={() => handleTimeRangeChange(range.value)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              timeRange === range.value
-                ? "bg-blue-600 text-white"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            {range.label}
-          </button>
-        ))}
-      </Card>
-
-      {/* Filters Row */}
-      <Card className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between">
-        <input
-          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm md:max-w-xs"
-          placeholder="搜索钱包地址..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">排序</span>
-          <Button size="sm" variant={sortBy === "score" ? "default" : "outline"} onClick={() => { setSortBy("score"); setPage(1); }}>
-            Score
-          </Button>
-          <Button size="sm" variant={sortBy === "total_pnl" ? "default" : "outline"} onClick={() => { setSortBy("total_pnl"); setPage(1); }}>
-            PnL
-          </Button>
-          <Button size="sm" variant={sortBy === "win_rate" ? "default" : "outline"} onClick={() => { setSortBy("win_rate"); setPage(1); }}>
-            胜率
-          </Button>
-          <Button size="sm" variant={sortBy === "volume_30d" ? "default" : "outline"} onClick={() => { setSortBy("volume_30d"); setPage(1); }}>
-            交易量
-          </Button>
+      {/* 选中钱包对比区 */}
+      {selectedWallets.size > 0 && (
+        <div className="rounded-xl border bg-card shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium">已选钱包 ({selectedWallets.size}/5)</p>
+            <button
+              onClick={() => setSelectedWallets(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              清除
+            </button>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {Array.from(selectedWallets).map((id) => {
+              const entry = entries.find((e) => e.wallet_id === id);
+              if (!entry) return null;
+              return (
+                <div
+                  key={id}
+                  className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5"
+                >
+                  <span className="text-xs font-mono">
+                    {entry.wallet_address.slice(0, 6)}...{entry.wallet_address.slice(-4)}
+                  </span>
+                  <span className={`text-xs font-bold ${entry.pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {entry.pnl >= 0 ? "+" : ""}{entry.pnl.toLocaleString()}
+                  </span>
+                  <button
+                    onClick={() => toggleWallet(id)}
+                    className="text-muted-foreground hover:text-red-500 ml-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </Card>
+      )}
 
-      {/* Table */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-medium">地址</th>
-                <th className="px-3 py-2.5 text-left font-medium">Markets</th>
-                <th className="px-3 py-2.5 text-right font-medium">Score</th>
-                <th className="px-3 py-2.5 text-right font-medium">7D PnL</th>
-                <th className="px-3 py-2.5 text-right font-medium">24H PnL</th>
-                <th className="px-3 py-2.5 text-right font-medium">1H PnL</th>
-                <th className="px-3 py-2.5 text-right font-medium">胜率</th>
-                <th className="px-3 py-2.5 text-right font-medium">交易次数</th>
-                <th className="px-3 py-2.5 text-left font-medium">最近活跃</th>
+      {/* 排行榜表格 */}
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-auto max-h-[600px]">
+          <table className="w-full">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b bg-card">
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide w-16">
+                  排名
+                </th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  钱包地址
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  PnL
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  收益率
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  交易量
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  胜率
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  交易次数
+                </th>
+                <th className="px-5 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide w-16">
+                  对比
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {(data?.items ?? []).map((item, idx) => {
-                const rank = (page - 1) * pageSize + idx + 1;
-                const pnl7d = item.pnl_7d ?? item.pnl7d ?? 0;
-                const pnl24h = item.pnl_24h ?? item.pnl24h ?? 0;
-                const pnl1h = item.pnl_1h ?? item.pnl1h ?? 0;
-                const isTopHolder = item.is_top_holder ?? item.isTopHolder ?? false;
-                const lastActive = item.last_active ?? item.lastActive;
+            <tbody className="divide-y">
+              {entries.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+                    暂无排行榜数据
+                  </td>
+                </tr>
+              ) : (
+                entries.map((entry) => {
+                  const isTop3 = entry.rank <= 3;
+                  const isSelected = selectedWallets.has(entry.wallet_id);
 
-                return (
-                  <tr key={item.address} className="border-t border-border hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-xs w-5">#{rank}</span>
-                        {isTopHolder && (
-                          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                            🐋 Top Holder
+                  return (
+                    <tr
+                      key={entry.wallet_id}
+                      className={`hover:bg-muted/50 transition-colors ${
+                        isSelected ? "bg-primary/5" : ""
+                      }`}
+                    >
+                      {/* 排名 */}
+                      <td className="px-5 py-3.5">
+                        {isTop3 ? (
+                          <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${
+                            entry.rank === 1
+                              ? "bg-yellow-100 text-yellow-600"
+                              : entry.rank === 2
+                              ? "bg-gray-100 text-gray-500"
+                              : "bg-orange-100 text-orange-600"
+                          }`}>
+                            <Trophy className="h-3.5 w-3.5" />
+                          </div>
+                        ) : (
+                          <span className="font-mono text-sm text-muted-foreground">
+                            #{entry.rank}
                           </span>
                         )}
-                        <CopyButton value={item.address} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {(item.markets ?? []).slice(0, 5).map((m) => (
-                          <span
-                            key={m}
-                            className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
-                          >
-                            {m}
+                      </td>
+
+                      {/* 地址 */}
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-sm">
+                          {entry.wallet_address.slice(0, 8)}...
+                          {entry.wallet_address.slice(-6)}
+                        </span>
+                      </td>
+
+                      {/* PnL */}
+                      <td className={`px-5 py-3.5 text-right font-mono font-medium ${
+                        entry.pnl >= 0 ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {entry.pnl >= 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                            ${Math.abs(entry.pnl).toLocaleString()}
                           </span>
-                        ))}
-                        {(item.markets?.length ?? 0) > 5 && (
-                          <span className="text-xs text-muted-foreground">
-                            +{(item.markets?.length ?? 0) - 5}
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <TrendingDown className="h-3.5 w-3.5" />
+                            -${Math.abs(entry.pnl).toLocaleString()}
                           </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium">
-                      {(item.score ?? 0).toFixed(1)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right font-mono ${pnl7d >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatPnl(pnl7d)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right font-mono ${pnl24h >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatPnl(pnl24h)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right font-mono ${pnl1h >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {formatPnl(pnl1h)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span className={item.win_rate ?? item.winRate ? "" : "text-muted-foreground"}>
-                        {item.win_rate ?? item.winRate ?? 0}%
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-muted-foreground">
-                      {item.lifetime_trade_count ?? item.trades ?? 0}
-                    </td>
-                    <td className="px-3 py-2.5 text-left text-muted-foreground text-xs">
-                      {formatLastActive(lastActive)}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+
+                      {/* 收益率 */}
+                      <td className={`px-5 py-3.5 text-right font-mono ${
+                        entry.pnl_percent >= 0 ? "text-green-500/80" : "text-red-500/80"
+                      }`}>
+                        {entry.pnl_percent >= 0 ? "+" : ""}{entry.pnl_percent.toFixed(2)}%
+                      </td>
+
+                      {/* 交易量 */}
+                      <td className="px-5 py-3.5 text-right font-mono text-muted-foreground">
+                        ${entry.volume_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </td>
+
+                      {/* 胜率 */}
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{ width: `${Math.min(entry.win_rate, 100)}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-sm text-muted-foreground">
+                            {entry.win_rate.toFixed(1)}%
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 交易次数 */}
+                      <td className="px-5 py-3.5 text-right font-mono text-muted-foreground">
+                        {entry.trades.toLocaleString()}
+                      </td>
+
+                      {/* 对比选择 */}
+                      <td className="px-5 py-3.5 text-center">
+                        <button
+                          onClick={() => toggleWallet(entry.wallet_id)}
+                          disabled={!isSelected && selectedWallets.size >= 5}
+                          className={`w-6 h-6 rounded border transition-colors ${
+                            isSelected
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : selectedWallets.size >= 5
+                              ? "border-muted-foreground/20 text-muted-foreground/20 cursor-not-allowed"
+                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary"
+                          }`}
+                        >
+                          {isSelected ? (
+                            <ChevronUp className="h-3.5 w-3.5 mx-auto" />
+                          ) : (
+                            <BarChart2 className="h-3.5 w-3.5 mx-auto" />
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-        </div>
-        {loading && <TableLoading rows={6} columns={8} />}
-      </Card>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          {search.trim()
-            ? `Showing ${data?.items?.length ?? 0} results for '${search.trim()}'`
-            : `共 ${data?.pagination?.total ?? 0} 条结果`}
-        </span>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            上一页
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {page} / {totalPages}
-          </span>
-          <Button size="sm" variant="outline" disabled={!(data?.pagination?.hasMore)} onClick={() => setPage((p) => p + 1)}>
-            下一页
-          </Button>
         </div>
       </div>
     </div>
