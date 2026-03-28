@@ -1,10 +1,8 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-
-// Maps frontend uppercase keys to backend lowercase pnl_cohort values
 const COHORT_MAP: Record<string, string> = {
   MONEY_PRINTER: "money_printer",
   PROFIT: "profit",
@@ -15,15 +13,14 @@ const COHORT_MAP: Record<string, string> = {
 
 export async function GET() {
   try {
-    // Fetch global overview + per-cohort stats + top wallets in parallel
     const cohortKeys = Object.keys(COHORT_MAP);
     const backendCohorts = Object.values(COHORT_MAP);
 
     const [overviewRes, ...cohortResults] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/cohorts/overview`, { cache: "no-store" }),
+      fetch(`${RAILWAY_URL}/api/v1/cohorts/overview`, { cache: "no-store" }),
       ...backendCohorts.flatMap((cohort) => [
-        fetch(`${API_BASE}/api/v1/cohorts/segment/${cohort}/stats`, { cache: "no-store" }),
-        fetch(`${API_BASE}/api/v1/cohorts/segment/${cohort}?limit=5&sort_by=pnl`, { cache: "no-store" }),
+        fetch(`${RAILWAY_URL}/api/v1/cohorts/segment/${cohort}/stats`, { cache: "no-store" }),
+        fetch(`${RAILWAY_URL}/api/v1/cohorts/segment/${cohort}?limit=5&sort_by=pnl`, { cache: "no-store" }),
       ]),
     ]);
 
@@ -34,7 +31,6 @@ export async function GET() {
 
     const overview = await overviewRes.json();
 
-    // Process per-cohort results (stats + wallets alternating)
     const result: Record<string, unknown> = {
       totalTracked: overview.totalWallets ?? 0,
       totalAccountValue: overview.marketStats?.totalAccountValue ?? 0,
@@ -47,7 +43,6 @@ export async function GET() {
       const key = cohortKeys[i];
       const statsRes = cohortResults[i * 2];
       const walletsRes = cohortResults[i * 2 + 1];
-
       let stats: Record<string, unknown> = {};
       let topWallets: unknown[] = [];
 

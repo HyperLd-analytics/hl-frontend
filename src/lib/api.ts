@@ -1,4 +1,5 @@
 import { AUTH_COOKIE_NAME, clearAccessTokenCookie, setAccessTokenCookie } from "@/lib/auth";
+import { emitToast } from "@/lib/toast-store";
 
 const API_BASE_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL ?? "");
 const API_PREFIX = "/api/v1";
@@ -38,13 +39,13 @@ async function tryRefreshToken() {
   return true;
 }
 
-export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: ApiFetchOptions): Promise<T> {
+export async function apiFetch<T>({ path, retryOnAuthError = true, signal, ...config }: ApiFetchOptions & { signal?: AbortSignal | null }): Promise<T> {
   const token = getAccessTokenFromCookie();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(config.headers as Record<string, string> ?? {})
   };
-  
+
   // 如果有 token，添加到 Authorization header
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -54,7 +55,9 @@ export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: 
     ...config,
     credentials: "include",
     cache: "no-store",
-    headers
+    headers,
+    // 显式传递 signal，避免浏览器将 undefined signal 当作无效值
+    ...(signal instanceof AbortSignal ? { signal } : {}),
   });
 
   if (response.status === 401 && retryOnAuthError) {
@@ -71,6 +74,24 @@ export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: 
 
   if (response.status === 403) {
     throw new Error("无权限访问该资源");
+  }
+
+  if (response.status === 429) {
+    const clonedResponse = response.clone();
+    const text = await clonedResponse.text();
+    let message = "请求过于频繁，请稍后再试";
+    try {
+      const payload = JSON.parse(text) as { error?: string; detail?: string };
+      if (payload.error) message = payload.error;
+      else if (payload.detail) message = payload.detail;
+    } catch {
+      message = text || message;
+    }
+    // Show toast notification for rate limit errors
+    if (typeof window !== "undefined") {
+      emitToast(message, "error");
+    }
+    throw new Error(message);
   }
 
   if (!response.ok) {

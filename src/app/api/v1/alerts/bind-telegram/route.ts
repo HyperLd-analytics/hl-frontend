@@ -1,20 +1,28 @@
-import { NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const cookieHeader = request.headers.get("cookie");
+  const body = await request.text();
+  const url = `${RAILWAY_URL}/api/v1/alerts/telegram/status`;
+
   try {
-    const body = await request.json();
-    const res = await fetch(`${API_BASE}/api/v1/alerts/telegram/status`, {
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeader ? { "Authorization": authHeader } : {}),
+        ...(cookieHeader ? { "Cookie": cookieHeader } : {}),
+      },
+      body,
     });
-    if (!res.ok) throw new Error(`Backend error: ${res.status}`);
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (error) {
     console.error("POST /api/v1/alerts/bind-telegram error:", error);
-    return NextResponse.json({ error: "Failed to bind Telegram" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to bind Telegram" }, { status: 502 });
   }
 }

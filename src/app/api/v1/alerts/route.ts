@@ -1,33 +1,40 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
 
-export async function GET() {
+async function proxyRequest(request: NextRequest, path: string, method: string) {
+  const authHeader = request.headers.get("authorization");
+  const cookieHeader = request.headers.get("cookie");
+  const searchParams = request.nextUrl.searchParams.toString();
+  const url = `${RAILWAY_URL}/api/v1/${path}${searchParams ? `?${searchParams}` : ""}`;
+
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(authHeader ? { "Authorization": authHeader } : {}),
+    ...(cookieHeader ? { "Cookie": cookieHeader } : {}),
+  };
+
   try {
-    const res = await fetch(`${API_BASE}/api/v1/alerts`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+    let body: BodyInit | undefined;
+    if (method !== "GET" && method !== "HEAD") {
+      const text = await request.text();
+      if (text) body = text;
+    }
+
+    const res = await fetch(url, { method, headers, body });
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (error) {
-    console.error("GET /api/v1/alerts error:", error);
-    return NextResponse.json({ alerts: [], error: "Failed to fetch alerts" }, { status: 500 });
+    console.error(`${method} /api/v1/${path} error:`, error);
+    return NextResponse.json({ message: "Proxy error" }, { status: 502 });
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const res = await fetch(`${API_BASE}/api/v1/alerts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Backend error: ${res.status}`);
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("POST /api/v1/alerts error:", error);
-    return NextResponse.json({ error: "Failed to create alert" }, { status: 500 });
-  }
+export async function GET(request: NextRequest) {
+  return proxyRequest(request, "alerts", "GET");
+}
+
+export async function POST(request: NextRequest) {
+  return proxyRequest(request, "alerts", "POST");
 }

@@ -1,6 +1,7 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://hl-backend-production-4aa1.up.railway.app';
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || 'https://hl-backend-production-4aa1.up.railway.app';
 
 export async function GET(
   request: NextRequest,
@@ -44,7 +45,7 @@ async function proxyRequest(
 ) {
   const path = pathSegments.join('/');
   const searchParams = request.nextUrl.searchParams.toString();
-  const url = `${BACKEND_URL}/api/v1/${path}${searchParams ? `?${searchParams}` : ''}`;
+  const url = `${RAILWAY_URL}/api/v1/${path}${searchParams ? `?${searchParams}` : ''}`;
 
   const headers: HeadersInit = {};
   

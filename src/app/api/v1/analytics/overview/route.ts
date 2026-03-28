@@ -1,27 +1,25 @@
-import { NextResponse } from "next/server";
-
 export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
   try {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/overview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 20 }),
+    const res = await fetch(`${RAILWAY_URL}/api/v1/analytics/overview`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeader ? { "Authorization": authHeader } : {}),
+      },
+      cache: "no-store",
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Backend error ${res.status}: ${text}`);
-    }
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (error) {
     console.error("GET /api/v1/analytics/overview error:", error);
     return NextResponse.json(
-      { overview: null, recent_signals: [], top_wallets: [], top_positions: [] },
-      { status: 500 }
+      { message: "failed to fetch" },
+      { status: 502 }
     );
   }
 }

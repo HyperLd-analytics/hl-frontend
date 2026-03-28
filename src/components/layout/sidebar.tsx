@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BellRing, Flame, GitCompare, Grid3X3, Heart, Home, Menu, TrendingUp, Users, Wallet, LayoutGrid, Star } from "lucide-react";
+import { Activity, BarChart3, BellRing, Brain,Calculator, CreditCard, Flame, LayoutGrid,Star,GitCompare, Home, Key, Menu, TrendingUp, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,17 @@ const navItems = [
   { href: "/dashboard/hypertracker", label: "Hypertracker", icon: TrendingUp },
   { href: "/dashboard/segments", label: "  Segments", icon: Users },
   { href: "/dashboard/leaderboard", label: "Smart Money 排行榜", icon: BarChart3 },
+  { href: "/dashboard/metrics", label: "自定义指标", icon: Calculator },
+  { href: "/dashboard/analytics", label: "高级图表分析", icon: Activity },
+  { href: "/dashboard/ai", label: "AI 智能分析", icon: Brain },
   { href: "/dashboard/compare", label: "钱包对比", icon: GitCompare },
   { href: "/dashboard/position-heatmap", label: "仓位热图", icon: LayoutGrid },
   { href: "/dashboard/perps", label: "合约中心", icon: LayoutGrid },
   { href: "/dashboard/liquidations", label: "清算热图", icon: Flame },
   { href: "/dashboard/alerts", label: "告警配置", icon: BellRing },
   { href: "/dashboard/favorites", label: "收藏夹", icon: Star },
+  { href: "/dashboard/api-keys", label: "API 开放平台", icon: Key },
+  { href: "/dashboard/billing", label: "订阅与账单", icon: CreditCard },
   { href: "/dashboard/wallet/0x1234...abcd", label: "钱包分析示例", icon: Wallet }
 ];
 
