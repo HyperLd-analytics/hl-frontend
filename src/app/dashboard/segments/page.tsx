@@ -1,266 +1,172 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useApiQuery } from "@/hooks/use-api-query";
-import { PageError } from "@/components/common/page-error";
+import { Badge } from "@/components/ui/badge";
 import { PageLoading } from "@/components/common/page-loading";
-import { TrendingUp, TrendingDown, Minus, Crown, Flame, Users } from "lucide-react";
-import type { CohortOverview } from "@/types/dashboard";
+import { PageError } from "@/components/common/page-error";
+import { useApiQuery } from "@/hooks/use-api-query";
+import { TrendingUp, Wallet, Activity, DollarSign, Users, ChevronRight, BarChart3 } from "lucide-react";
 
-interface CohortCardData {
-  pnlCohort: string;
-  label: string;
-  description: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  icon: React.ReactNode;
-  href: string;
-  stats?: {
-    walletCount: number;
-    totalAccountValue: number;
-    avgPnl: number;
-    avgWinRate: number;
-    avgLeverage: number;
-  };
-  topWallets?: Array<{
-    address: string;
-    totalPnl: number;
-    volume30d: number;
-    winRate: number;
-  }>;
+interface Segment {
+  id?: string;
+  name?: string;
+  label?: string;
+  wallet_count?: number;
+  walletCount?: number;
+  total_pnl?: number;
+  totalPnl?: number;
+  avg_win_rate?: number;
+  avgWinRate?: number;
+  volume_30d?: number;
+  volume30d?: number;
+  description?: string;
+  cohort?: string;
 }
 
-const COHORT_DEFS = [
-  {
-    pnlCohort: "MONEY_PRINTER",
-    label: "Money Printers",
-    description: ">100% gains — Top performers with exceptional returns",
-    color: "text-amber-400",
-    bgColor: "bg-amber-950",
-    borderColor: "border-amber-600",
-    icon: <Crown className="h-5 w-5 text-amber-400" />,
-    href: "/dashboard/cohorts/MONEY_PRINTER",
-  },
-  {
-    pnlCohort: "PROFIT",
-    label: "Profit",
-    description: "+10% ~ +100% gains — Consistent profitable traders",
-    color: "text-green-400",
-    bgColor: "bg-green-950",
-    borderColor: "border-green-600",
-    icon: <TrendingUp className="h-5 w-5 text-green-400" />,
-    href: "/dashboard/cohorts/PROFIT",
-  },
-  {
-    pnlCohort: "BREAK_EVEN",
-    label: "Break Even",
-    description: "-10% ~ +10% — Neutral performance zone",
-    color: "text-gray-400",
-    bgColor: "bg-gray-900",
-    borderColor: "border-gray-600",
-    icon: <Minus className="h-5 w-5 text-gray-400" />,
-    href: "/dashboard/cohorts/BREAK_EVEN",
-  },
-  {
-    pnlCohort: "REKT",
-    label: "Rekt",
-    description: "-50% ~ -10% losses — Underperforming traders",
-    color: "text-red-400",
-    bgColor: "bg-red-950",
-    borderColor: "border-red-600",
-    icon: <TrendingDown className="h-5 w-5 text-red-400" />,
-    href: "/dashboard/cohorts/REKT",
-  },
-  {
-    pnlCohort: "GIGA_REKT",
-    label: "Giga Rekt",
-    description: "<-50% losses — Catastrophic losses",
-    color: "text-red-600",
-    bgColor: "bg-red-950",
-    borderColor: "border-red-800",
-    icon: <Flame className="h-5 w-5 text-red-600" />,
-    href: "/dashboard/cohorts/GIGA_REKT",
-  },
+interface SegmentsResponse {
+  segments?: Segment[];
+  data?: Segment[];
+  wallets?: Segment[];
+  error?: string;
+}
+
+const SEGMENT_CARDS = [
+  { id: "whale-tracker", label: "Whale Tracker", desc: "Track large position changes", icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-500/10", href: "/dashboard/segments/whale-tracker" },
+  { id: "momentum-tracker", label: "Momentum Tracker", desc: "Strong directional trades", icon: Activity, color: "text-purple-500", bg: "bg-purple-500/10", href: "/dashboard/segments/momentum-tracker" },
+  { id: "money-printer", label: "Money Printer", desc: "Consistent profitable trades", icon: DollarSign, color: "text-green-500", bg: "bg-green-500/10", href: "/dashboard/segments/money-printer" },
+  { id: "defi-trends", label: "DeFi Trends", desc: "DeFi protocol interactions", icon: BarChart3, color: "text-orange-500", bg: "bg-orange-500/10", href: "/dashboard/segments/defi-trends" },
 ];
 
-function formatValue(v: number | undefined | null): string {
-  if (v == null) return "-";
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-  return `$${v.toFixed(0)}`;
-}
-
-function formatPnl(v: number | undefined | null): string {
-  if (v == null) return "-";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
-}
-
-function formatAddress(addr: string): string {
-  if (!addr) return "-";
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
-function CohortCard({ cohort }: { cohort: CohortCardData }) {
+function StatPill({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ElementType; color: string }) {
   return (
-    <Card className={`relative overflow-hidden border ${cohort.borderColor} ${cohort.bgColor}`}>
-      <div className="p-5">
-        {/* Header */}
-        <div className="mb-4 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`rounded-md p-2 ${cohort.bgColor}`}>
-              {cohort.icon}
-            </div>
-            <div>
-              <h3 className={`font-semibold ${cohort.color}`}>{cohort.label}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{cohort.description}</p>
-            </div>
-          </div>
-          <Link href={cohort.href}>
-            <Button size="sm" variant="outline" className="text-xs">
-              Explore All
-            </Button>
-          </Link>
-        </div>
-
-        {/* Stats */}
-        {cohort.stats && (
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Wallets</p>
-              <p className="text-sm font-medium">{cohort.stats.walletCount.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Value</p>
-              <p className="text-sm font-medium">{formatValue(cohort.stats.totalAccountValue)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Avg PnL</p>
-              <p className={`text-sm font-medium ${cohort.stats.avgPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {formatPnl(cohort.stats.avgPnl)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Avg Win Rate</p>
-              <p className="text-sm font-medium">{cohort.stats.avgWinRate?.toFixed(1) ?? "-"}%</p>
-            </div>
-          </div>
-        )}
-
-        {/* Top Wallets */}
-        {cohort.topWallets && cohort.topWallets.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Top Wallets</p>
-            <div className="space-y-1.5">
-              {cohort.topWallets.slice(0, 5).map((w, i) => (
-                <Link
-                  key={w.address}
-                  href={`/dashboard/wallet/${w.address}`}
-                  className="flex items-center justify-between rounded bg-black/20 px-2 py-1 text-xs transition-colors hover:bg-black/30"
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{i + 1}.</span>
-                    <span className="font-mono">{formatAddress(w.address)}</span>
-                  </span>
-                  <span className={`font-medium ${w.totalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                    {formatPnl(w.totalPnl)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </Card>
+    <div className="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1">
+      <Icon className={`h-3.5 w-3.5 ${color}`} />
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <span className="text-xs font-medium">{value}</span>
+    </div>
   );
 }
 
 export default function SegmentsPage() {
-  const { data, loading, error, refetch } = useApiQuery<CohortOverview>("/cohorts/overview", {
-    debounceMs: 120,
+  const { data, loading, error, refetch } = useApiQuery<SegmentsResponse>("/segments", {
+    staleTimeMs: 30_000,
   });
 
-  if (loading && !data) return <PageLoading />;
-  if (error && !data) return <PageError message={error.message} onRetry={refetch} />;
-
-  // Build cohort cards from overview data
-  const cohortCards: CohortCardData[] = COHORT_DEFS.map((def) => {
-    const cohortKey = def.pnlCohort as keyof CohortOverview;
-    const cohortData = data?.[cohortKey] as Record<string, unknown> | undefined;
-    if (!cohortData) return { ...def, stats: undefined, topWallets: [] };
-    return {
-      ...def,
-      stats: {
-        walletCount: Number(cohortData.walletCount ?? 0),
-        totalAccountValue: Number(cohortData.totalAccountValue ?? 0),
-        avgPnl: Number(cohortData.avgPnl ?? 0),
-        avgWinRate: Number(cohortData.avgWinRate ?? 0),
-        avgLeverage: Number(cohortData.avgLeverage ?? 0),
-      },
-      topWallets: (cohortData.topWallets as CohortCardData["topWallets"]) ?? [],
-    };
-  });
-
-  // Money printers first, then others
-  const sortedCards = [
-    cohortCards.find((c) => c.pnlCohort === "MONEY_PRINTER")!,
-    ...cohortCards.filter((c) => c.pnlCohort !== "MONEY_PRINTER"),
-  ];
+  const segments: Segment[] = data?.segments ?? data?.data ?? data?.wallets ?? [];
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
-        <span>/</span>
-        <span className="text-foreground">Hypertracker</span>
-        <span>/</span>
-        <span className="text-foreground">Segments</span>
-      </div>
-
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Hypertracker Segments</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track smart money wallets segmented by performance
+          <h1 className="text-2xl font-semibold">钱包分段</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            按交易风格和策略分类的钱包列表
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span>{data?.totalTracked ?? 0} tracked wallets</span>
+      </div>
+
+      {/* Static Segment Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {SEGMENT_CARDS.map((seg) => {
+          const Icon = seg.icon;
+          return (
+            <Link key={seg.id} href={seg.href}>
+              <Card className="p-5 border-border/50 hover:border-primary/30 transition-colors cursor-pointer group">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-lg ${seg.bg}`}>
+                      <Icon className={`h-5 w-5 ${seg.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{seg.label}</h3>
+                      <p className="text-sm text-muted-foreground mt-0.5">{seg.desc}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors mt-1" />
+                </div>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* API-loaded segments table */}
+      {loading && <PageLoading />}
+
+      {error && !data && (
+        <PageError message={String(error)} onRetry={() => void refetch()} />
+      )}
+
+      {segments.length > 0 && (
+        <div>
+          <h2 className="text-lg font-medium mb-3">实时分段数据</h2>
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left font-medium">名称</th>
+                    <th className="px-3 py-2.5 text-right font-medium">钱包数量</th>
+                    <th className="px-3 py-2.5 text-right font-medium">总 PnL</th>
+                    <th className="px-3 py-2.5 text-right font-medium">平均胜率</th>
+                    <th className="px-3 py-2.5 text-right font-medium">30D 交易量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segments.map((seg, i) => (
+                    <tr key={seg.id ?? seg.name ?? i} className="border-t border-border hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-2.5 font-medium">
+                        <div className="flex items-center gap-2">
+                          <span>{seg.label ?? seg.name ?? "-"}</span>
+                          {seg.cohort && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {seg.cohort}
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                          {(seg.wallet_count ?? seg.walletCount ?? 0).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className={`px-3 py-2.5 text-right font-mono ${
+                        (seg.total_pnl ?? seg.totalPnl ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {((seg.total_pnl ?? seg.totalPnl ?? 0) >= 0 ? "+" : "")}$
+                        {((seg.total_pnl ?? seg.totalPnl ?? 0) / 1000).toFixed(1)}K
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {((seg.avg_win_rate ?? seg.avgWinRate ?? 0) * 100).toFixed(1)}%
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono">
+                        {((seg.volume_30d ?? seg.volume30d ?? 0) >= 1_000_000
+                          ? `$${((seg.volume_30d ?? seg.volume30d ?? 0) / 1_000_000).toFixed(1)}M`
+                          : (seg.volume_30d ?? seg.volume30d ?? 0) >= 1_000
+                          ? `$${((seg.volume_30d ?? seg.volume30d ?? 0) / 1_000).toFixed(1)}K`
+                          : `-`)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </div>
+      )}
 
-      {/* Overall Stats Bar */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Total Account Value</p>
-          <p className="mt-1 text-xl font-semibold">{formatValue(data?.totalAccountValue)}</p>
+      {data && !loading && segments.length === 0 && (
+        <Card className="p-8 text-center text-muted-foreground">
+          <div className="flex flex-col items-center gap-2">
+            <Wallet className="h-8 w-8 opacity-30" />
+            <p>暂无分段数据</p>
+          </div>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Total 30d Volume</p>
-          <p className="mt-1 text-xl font-semibold">{formatValue(data?.totalVolume30d)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Money Printers</p>
-          <p className="mt-1 text-xl font-semibold text-amber-400">{data?.MONEY_PRINTER?.walletCount ?? 0}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Giga Rekt</p>
-          <p className="mt-1 text-xl font-semibold text-red-600">{data?.GIGA_REKT?.walletCount ?? 0}</p>
-        </Card>
-      </div>
-
-      {/* Cohort Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {sortedCards.map((cohort) => (
-          <CohortCard key={cohort.pnlCohort} cohort={cohort} />
-        ))}
-      </div>
+      )}
     </div>
   );
 }

@@ -108,32 +108,29 @@ export default function HypertrackerPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const [overviewRes, leaderboardRes] = await Promise.all([
-          fetch("/api/v1/cohorts/overview", { cache: "no-store" }),
+        const [analyticsRes, leaderboardRes] = await Promise.all([
+          fetch("/api/v1/analytics", { cache: "no-store" }),
           fetch("/api/v1/wallets/leaderboard?page=1&pageSize=1&sortBy=total_pnl", { cache: "no-store" }),
         ]);
 
-        if (overviewRes.ok && leaderboardRes.ok) {
-          const overview = await overviewRes.json();
+        if (analyticsRes.ok && leaderboardRes.ok) {
+          const analytics = await analyticsRes.json();
           const leaderboard = await leaderboardRes.json();
 
-          // Sum wallet counts across all cohorts
-          const cohorts = ["MONEY_PRINTER", "PROFIT", "BREAK_EVEN", "REKT", "GIGA_REKT"];
-          let totalWallets = 0;
-          let totalPnl = 0;
-          let totalVolume = 0;
-
-          for (const cohort of cohorts) {
-            const c = overview[cohort];
-            if (c?.walletCount) totalWallets += c.walletCount;
-            if (c?.avgPnl) totalPnl += (c.avgPnl * c.walletCount);
-            if (c?.totalVolume) totalVolume += c.totalVolume;
-          }
+          // Prefer analytics API if available, fall back to leaderboard totals
+          const totalWallets = analytics.total_wallets
+            ?? analytics.totalWallets
+            ?? analytics.wallet_count
+            ?? leaderboard.total
+            ?? 0;
+          const totalPnl = analytics.total_pnl ?? analytics.totalPnl ?? 0;
+          const avgWinRate = analytics.avg_win_rate ?? analytics.avgWinRate ?? 0;
+          const totalVolume = analytics.total_volume ?? analytics.totalVolume ?? 0;
 
           setStats({
-            totalWallets: totalWallets || leaderboard.total || 0,
+            totalWallets,
             totalPnl,
-            avgWinRate: 0,
+            avgWinRate,
             totalVolume,
           });
         }
