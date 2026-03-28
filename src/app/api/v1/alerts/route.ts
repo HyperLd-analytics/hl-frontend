@@ -7,7 +7,7 @@ async function proxyRequest(request: NextRequest, path: string, method: string) 
   const authHeader = request.headers.get("authorization");
   const cookieHeader = request.headers.get("cookie");
   const searchParams = request.nextUrl.searchParams.toString();
-  const url = `${RAILWAY_URL}/api/v1/${path}${searchParams ? \`?\${searchParams}\` : ""}`;
+  const url = `${RAILWAY_URL}/api/v1/${path}${searchParams ? `?${searchParams}` : ""}`;
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -26,7 +26,7 @@ async function proxyRequest(request: NextRequest, path: string, method: string) 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (error) {
-    console.error(\`\${method} /api/v1/\${path} error:\`, error);
+    console.error(`${method} /api/v1/${path} error:`, error);
     return NextResponse.json({ message: "Proxy error" }, { status: 502 });
   }
 }
