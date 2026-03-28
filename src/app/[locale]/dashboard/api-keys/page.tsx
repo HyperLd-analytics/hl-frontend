@@ -20,6 +20,7 @@ import {
   Shield,
   RefreshCw,
   ExternalLink,
+  BookOpen,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -448,6 +449,8 @@ function KeyCard({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+type TabKey = "keys" | "docs";
+
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [stats, setStats] = useState<UsageStats | null>(null);
@@ -456,6 +459,7 @@ export default function ApiKeysPage() {
   const [createdKey, setCreatedKey] = useState<{ key: string; name: string } | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<TabKey>("keys");
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -537,6 +541,32 @@ export default function ApiKeysPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        <button
+          className={`flex-1 py-2 text-sm font-medium transition-colors ${
+            tab === "keys" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setTab("keys")}
+        >
+          <Key className="inline h-4 w-4 mr-1" />
+          密钥管理
+        </button>
+        <button
+          className={`flex-1 py-2 text-sm font-medium transition-colors ${
+            tab === "docs" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setTab("docs")}
+        >
+          <BookOpen className="inline h-4 w-4 mr-1" />
+          API 文档
+        </button>
+      </div>
+
+      {tab === "docs" ? (
+        <ApiDocsSection />
+      ) : (
+      <>
       {/* Info Banner */}
       <Card className="p-4 border-primary/20 bg-primary/5">
         <div className="flex items-start gap-3">
@@ -545,9 +575,7 @@ export default function ApiKeysPage() {
             <p className="font-medium">通过 API 访问数据</p>
             <p className="text-xs text-muted-foreground mt-1">
               创建密钥后，在请求头中添加 <code className="bg-muted px-1 rounded">X-API-Key: hlk_xxx</code> 即可调用 API。
-              完整文档请查看{" "}
-              <a href="#" className="text-primary underline">API 文档</a>
-            </p>
+              查看完整文档请切换到「API 文档」Tab。</p>
           </div>
         </div>
       </Card>
@@ -644,6 +672,166 @@ export default function ApiKeysPage() {
       {showStats && stats && (
         <UsageModal stats={stats} onClose={() => setShowStats(false)} />
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ─── API Docs Section ─────────────────────────────────────────────────────────
+
+function ApiDocsSection() {
+  const [copied, setCopied] = useState("");
+
+  const copy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(""), 2000);
+  };
+
+  const endpoints = [
+    { method: "GET", path: "/api/v1/analytics/overview", desc: "获取 Dashboard 概览数据（需认证）" },
+    { method: "GET", path: "/api/v1/wallets/leaderboard", desc: "钱包排行榜，支持多条件筛选和分页" },
+    { method: "GET", path: "/api/v1/wallets/{address}", desc: "钱包详情分析" },
+    { method: "GET", path: "/api/v1/wallets/compare?addresses=...", desc: "多钱包对比分析" },
+    { method: "GET", path: "/api/v1/positions/{address}/current", desc: "获取钱包当前活跃仓位" },
+    { method: "GET", path: "/api/v1/positions/{address}/history", desc: "仓位变动历史" },
+    { method: "GET", path: "/api/v1/liquidations/heatmap", desc: "清算热力图数据" },
+    { method: "GET", path: "/api/v1/alerts/", desc: "告警列表和 CRUD" },
+    { method: "GET", path: "/api/v1/cohorts/overview", desc: "市场概览（无需认证，有缓存）" },
+    { method: "GET", path: "/api/v1/custom-metrics/", desc: "自定义指标 CRUD" },
+    { method: "POST", path: "/api/v1/custom-metrics/calculate", desc: "计算自定义指标" },
+    { method: "GET", path: "/api/v1/custom-metrics/templates", desc: "获取预置指标模板" },
+  ];
+
+  const examples = [
+    {
+      title: "cURL",
+      lang: "bash",
+      code: `curl -H "X-API-Key: hlk_your_api_key" \\
+  https://api.hyperliquid-lens.com/api/v1/wallets/leaderboard?sort_by=score&sort_dir=desc`,
+    },
+    {
+      title: "JavaScript (Fetch)",
+      lang: "javascript",
+      code: `const response = await fetch(
+  'https://api.hyperliquid-lens.com/api/v1/wallets/leaderboard',
+  {
+    headers: { 'X-API-Key': 'hlk_your_api_key' }
+  }
+);
+const data = await response.json();
+console.log(data);`,
+    },
+    {
+      title: "Python",
+      lang: "python",
+      code: `import requests
+
+resp = requests.get(
+    "https://api.hyperliquid-lens.com/api/v1/wallets/leaderboard",
+    headers={"X-API-Key": "hlk_your_api_key"}
+)
+print(resp.json())`,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Overview */}
+      <Card className="p-5 border-border/50">
+        <h3 className="font-semibold mb-3">概述</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Hyperliquid Lens API 提供对链上数据的编程访问。所有请求需要在 Header 中携带
+          API 密钥：<code className="bg-muted px-1.5 py-0.5 rounded text-xs">X-API-Key: hlk_xxx</code>
+        </p>
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          {[
+            { label: "基础 URL", value: "https://api.hyperliquid-lens.com/api/v1" },
+            { label: "协议", value: "HTTPS (必须)" },
+            { label: "认证方式", value: "API Key (Header)" },
+            { label: "响应格式", value: "JSON" },
+          ].map((item) => (
+            <div key={item.label} className="bg-muted/50 rounded-md p-3">
+              <p className="text-xs text-muted-foreground">{item.label}</p>
+              <p className="text-sm font-mono font-medium mt-0.5">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Endpoints */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">可用端点</h3>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-20">方法</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">路径</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {endpoints.map((ep) => (
+                <tr key={ep.path} className="border-t border-border/50 hover:bg-muted/20">
+                  <td className="px-3 py-2">
+                    <span className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded ${
+                      ep.method === "GET" ? "bg-green-500/10 text-green-500" :
+                      ep.method === "POST" ? "bg-blue-500/10 text-blue-500" :
+                      ep.method === "PATCH" ? "bg-yellow-500/10 text-yellow-500" :
+                      "bg-red-500/10 text-red-500"
+                    }`}>
+                      {ep.method}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{ep.path}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{ep.desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SDK Examples */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">代码示例</h3>
+        <div className="space-y-3">
+          {examples.map((ex) => (
+            <Card key={ex.title} className="p-4 border-border/50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">{ex.title}</span>
+                <button
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => copy(ex.title, ex.code)}
+                >
+                  {copied === ex.title ? "已复制!" : "复制"}
+                </button>
+              </div>
+              <pre className="bg-muted rounded-md p-3 text-xs font-mono overflow-x-auto text-muted-foreground">
+                {ex.code}
+              </pre>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Swagger Link */}
+      <Card className="p-4 border-border/50 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">在线调试</p>
+          <p className="text-xs text-muted-foreground mt-1">使用 Swagger UI 交互式调试 API</p>
+        </div>
+        <a
+          href="/api/docs"
+          className="text-sm text-primary hover:underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Swagger Docs →
+        </a>
+      </Card>
     </div>
   );
 }
