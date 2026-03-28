@@ -42,7 +42,7 @@ export function TradeActivityHeatmap({ data, metric = "count" }: TradeActivityHe
   }
 
   // Determine x-axis range
-  const weeks = [...new Set(data.map((d) => d.week))].sort((a, b) => a - b);
+  const weeks = Array.from(new Set(data.map((d) => d.week))).sort((a, b) => a - b);
   const startWeek = weeks[0] ?? 0;
   const endWeek = weeks[weeks.length - 1] ?? 52;
 
