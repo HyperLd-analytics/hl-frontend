@@ -38,13 +38,13 @@ async function tryRefreshToken() {
   return true;
 }
 
-export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: ApiFetchOptions): Promise<T> {
+export async function apiFetch<T>({ path, retryOnAuthError = true, signal, ...config }: ApiFetchOptions & { signal?: AbortSignal | null }): Promise<T> {
   const token = getAccessTokenFromCookie();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(config.headers as Record<string, string> ?? {})
   };
-  
+
   // 如果有 token，添加到 Authorization header
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -54,7 +54,9 @@ export async function apiFetch<T>({ path, retryOnAuthError = true, ...config }: 
     ...config,
     credentials: "include",
     cache: "no-store",
-    headers
+    headers,
+    // 显式传递 signal，避免浏览器将 undefined signal 当作无效值
+    ...(signal instanceof AbortSignal ? { signal } : {}),
   });
 
   if (response.status === 401 && retryOnAuthError) {
