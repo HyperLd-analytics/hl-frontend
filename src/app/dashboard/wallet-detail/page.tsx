@@ -7,6 +7,7 @@ import { Wallet, TrendingUp, TrendingDown, BarChart2, Star, Calendar } from "luc
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { PnLAreaChart } from "@/components/charts/pnl-area-chart";
 
 type WalletDetail = {
   found: boolean;
@@ -25,6 +26,21 @@ type WalletDetail = {
   overall_winrate: number;
   total_closed_trades: number;
   winrate_by_symbol: Array<{ symbol: string; total_trades: number; win_rate: number; total_pnl: number }>;
+};
+
+type EquityCurve = {
+  found: boolean;
+  wallet_id: number;
+  granularity: string;
+  data: Array<{
+    date: string;
+    daily_pnl: number;
+    unrealized_pnl: number;
+    realized_pnl: number;
+    cumulative_pnl: number;
+    drawdown_pct: number;
+    trade_count?: number;
+  }>;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -83,10 +99,18 @@ function PnLCurve({ curve }: { curve: WalletDetail["pnl_curve"] }) {
 export default function WalletDetailPage() {
   const searchParams = useSearchParams();
   const walletId = searchParams.get("wallet_id");
-  const [tab, setTab] = useState<"overview" | "positions" | "performance">("overview");
+  const [tab, setTab] = useState<"overview" | "positions" | "performance" | "equity">("overview");
+  const [granularity, setGranularity] = useState<"day" | "week">("day");
 
   const { data, error, isLoading } = useSWR<WalletDetail>(
     walletId ? `/api/v1/wallet-detail/route.ts?wallet_id=${walletId}` : null,
+    fetcher
+  );
+
+  const { data: equityData } = useSWR<EquityCurve>(
+    walletId && tab === "equity"
+      ? `/api/v1/wallet-detail/equity-curve/route.ts?wallet_id=${walletId}&granularity=${granularity}&days=90`
+      : null,
     fetcher
   );
 
@@ -200,7 +224,7 @@ export default function WalletDetailPage() {
 
       {/* Tab 切换 */}
       <div className="flex rounded-lg border bg-card p-1 gap-1 w-fit">
-        {(["overview", "positions", "performance"] as const).map((t) => (
+        {(["overview", "positions", "performance", "equity"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -208,7 +232,7 @@ export default function WalletDetailPage() {
               tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
           >
-            {t === "overview" ? "总览" : t === "positions" ? "持仓" : "绩效曲线"}
+            {t === "overview" ? "总览" : t === "positions" ? "持仓" : t === "performance" ? "绩效曲线" : "权益曲线"}
           </button>
         ))}
       </div>
@@ -328,6 +352,116 @@ export default function WalletDetailPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {tab === "equity" && (
+        <div className="space-y-4">
+          {/* 粒度切换 */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">权益曲线</p>
+            <div className="flex rounded-lg border bg-card p-1 gap-1">
+              {(["day", "week"] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGranularity(g)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    granularity === g ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {g === "day" ? "日线" : "周线"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 权益曲线图表 */}
+          <div className="rounded-xl border bg-card p-5">
+            {!equityData ? (
+              <div className="h-72 flex items-center justify-center text-muted-foreground">加载中...</div>
+            ) : !equityData.found || !equityData.data?.length ? (
+              <div className="h-72 flex items-center justify-center text-muted-foreground">
+                暂无权益曲线数据
+              </div>
+            ) : (
+              <PnLAreaChart
+                data={equityData.data.map((d) => ({
+                  date: d.date ? new Date(d.date).toLocaleDateString("zh-CN", { month: "short", day: "numeric" }) : "",
+                  pnl: d.daily_pnl,
+                  cumulative: d.cumulative_pnl,
+                }))}
+                showCumulative={true}
+              />
+            )}
+          </div>
+
+          {/* 回撤信息 */}
+          {equityData?.data && equityData.data.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {(() => {
+                const maxDrawdown = Math.max(...equityData.data.map((d) => d.drawdown_pct));
+                const finalCumulative = equityData.data[equityData.data.length - 1]?.cumulative_pnl ?? 0;
+                const peak = Math.max(...equityData.data.map((d) => d.cumulative_pnl));
+                return (
+                  <>
+                    <div className="rounded-xl border bg-card p-4">
+                      <p className="text-xs text-muted-foreground mb-1">最大回撤</p>
+                      <p className="text-xl font-bold text-red-500">-{maxDrawdown.toFixed(1)}%</p>
+                    </div>
+                    <div className="rounded-xl border bg-card p-4">
+                      <p className="text-xs text-muted-foreground mb-1">历史峰值</p>
+                      <p className="text-xl font-bold text-green-500">+${peak.toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-xl border bg-card p-4">
+                      <p className="text-xs text-muted-foreground mb-1">当前累计</p>
+                      <p className={`text-xl font-bold ${finalCumulative >= 0 ? "text-green-500" : "text-red-500"}`}>
+                        {finalCumulative >= 0 ? "+" : ""}${finalCumulative.toLocaleString()}
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* 历史数据表格 */}
+          {equityData?.data && equityData.data.length > 0 && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="px-5 py-3 border-b">
+                <p className="text-sm font-semibold">历史明细</p>
+              </div>
+              <div className="overflow-auto max-h-[300px]">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/50 sticky top-0">
+                      <th className="px-5 py-2 text-left text-xs font-medium text-muted-foreground">日期</th>
+                      <th className="px-5 py-2 text-right text-xs font-medium text-muted-foreground">日盈亏</th>
+                      <th className="px-5 py-2 text-right text-xs font-medium text-muted-foreground">累计盈亏</th>
+                      <th className="px-5 py-2 text-right text-xs font-medium text-muted-foreground">回撤</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {[...equityData.data].reverse().map((d, i) => (
+                      <tr key={i} className="hover:bg-muted/50">
+                        <td className="px-5 py-2.5 text-sm">
+                          {d.date ? new Date(d.date).toLocaleDateString("zh-CN", { year: "numeric", month: "short", day: "numeric" }) : "-"}
+                        </td>
+                        <td className={`px-5 py-2.5 text-right font-mono text-sm ${d.daily_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          {d.daily_pnl >= 0 ? "+" : ""}${d.daily_pnl.toLocaleString()}
+                        </td>
+                        <td className={`px-5 py-2.5 text-right font-mono text-sm font-medium ${d.cumulative_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          {d.cumulative_pnl >= 0 ? "+" : ""}${d.cumulative_pnl.toLocaleString()}
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-mono text-sm text-red-400">
+                          -{d.drawdown_pct.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
