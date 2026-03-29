@@ -265,7 +265,7 @@ export default function CohortsPage() {
                       borderRadius: 8,
                     }}
                     formatter={(value) => [`${((value as number) * 100).toFixed(2)}%`, "Bias"]}
-                    labelFormatter={(label: string) => `日期: ${label}`}
+                    labelFormatter={(label) => `日期: ${label}`}
                   />
                   <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                   <Line
