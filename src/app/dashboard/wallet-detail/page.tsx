@@ -99,8 +99,9 @@ function PnLCurve({ curve }: { curve: WalletDetail["pnl_curve"] }) {
 export default function WalletDetailPage() {
   const searchParams = useSearchParams();
   const walletId = searchParams.get("wallet_id");
-  const [tab, setTab] = useState<"overview" | "positions" | "performance" | "equity">("overview");
+  const [tab, setTab] = useState<"overview" | "positions" | "performance" | "equity" | "funding">("overview");
   const [granularity, setGranularity] = useState<"day" | "week">("day");
+  const [fundingDays, setFundingDays] = useState<"7" | "30" | "90">("30");
 
   const { data, error, isLoading } = useSWR<WalletDetail>(
     walletId ? `/api/v1/wallet-detail/route.ts?wallet_id=${walletId}` : null,
@@ -110,6 +111,21 @@ export default function WalletDetailPage() {
   const { data: equityData } = useSWR<EquityCurve>(
     walletId && tab === "equity"
       ? `/api/v1/wallet-detail/equity-curve/route.ts?wallet_id=${walletId}&granularity=${granularity}&days=90`
+      : null,
+    fetcher
+  );
+
+  // Funding 数据（钱包地址来自 wallet detail data）
+  const walletAddress = data?.wallet_address;
+  const { data: fundingData } = useSWR<{
+    address: string;
+    days: number;
+    total_funding_income: number;
+    record_count: number;
+    by_symbol: Record<string, { total_funding_usd: number; count: number; first_time: string; last_time: string }>;
+  }>(
+    walletAddress && tab === "funding"
+      ? `/api/v1/wallets/${walletAddress}/funding/route.ts?days=${fundingDays}`
       : null,
     fetcher
   );
@@ -224,7 +240,7 @@ export default function WalletDetailPage() {
 
       {/* Tab 切换 */}
       <div className="flex rounded-lg border bg-card p-1 gap-1 w-fit">
-        {(["overview", "positions", "performance", "equity"] as const).map((t) => (
+        {(["overview", "positions", "performance", "equity", "funding"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -232,7 +248,7 @@ export default function WalletDetailPage() {
               tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
           >
-            {t === "overview" ? "总览" : t === "positions" ? "持仓" : t === "performance" ? "绩效曲线" : "权益曲线"}
+            {t === "overview" ? "总览" : t === "positions" ? "持仓" : t === "performance" ? "绩效曲线" : t === "equity" ? "权益曲线" : "资金费率"}
           </button>
         ))}
       </div>
@@ -461,6 +477,96 @@ export default function WalletDetailPage() {
                 </table>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === "funding" && (
+        <div className="space-y-4">
+          {/* 时间范围切换 */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">资金费率收入（Funding Income）</p>
+            <div className="flex rounded-lg border bg-card p-1 gap-1">
+              {(["7", "30", "90"] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setFundingDays(d)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    fundingDays === d ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {d}天
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {!fundingData ? (
+            <div className="h-48 flex items-center justify-center">
+              <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : fundingData.record_count === 0 ? (
+            <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
+              暂无资金费率数据
+            </div>
+          ) : (
+            <>
+              {/* 汇总卡片 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-xl border bg-card p-5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">累计资金费率收入</p>
+                  <p className={`text-2xl font-bold mt-1 ${fundingData.total_funding_income >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {fundingData.total_funding_income >= 0 ? "+" : ""}${fundingData.total_funding_income.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">过去{fundingDays}天</p>
+                </div>
+                <div className="rounded-xl border bg-card p-5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">支付记录数</p>
+                  <p className="text-2xl font-bold mt-1">{fundingData.record_count.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">笔</p>
+                </div>
+                <div className="rounded-xl border bg-card p-5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">覆盖币种</p>
+                  <p className="text-2xl font-bold mt-1">{Object.keys(fundingData.by_symbol || {}).length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">个交易对</p>
+                </div>
+              </div>
+
+              {/* 按币种分解 */}
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <div className="px-5 py-3 border-b">
+                  <p className="text-sm font-semibold">各币种资金费率明细</p>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">币种</th>
+                        <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">累计收入</th>
+                        <th className="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground">记录数</th>
+                        <th className="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">时间范围</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {Object.entries(fundingData.by_symbol || {}).map(([coin, info]) => (
+                        <tr key={coin} className="hover:bg-muted/50">
+                          <td className="px-5 py-3 font-mono font-bold text-sm">{coin}</td>
+                          <td className={`px-5 py-3 text-right font-mono font-medium ${(info as any).total_funding_usd >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            {(info as any).total_funding_usd >= 0 ? "+" : ""}${(info as any).total_funding_usd.toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">{(info as any).count}</td>
+                          <td className="px-5 py-3 text-xs text-muted-foreground">
+                            {info.first_time ? new Date(info.first_time).toLocaleDateString("zh-CN", { month: "short", day: "numeric" }) : "-"}
+                            {" ~ "}
+                            {info.last_time ? new Date(info.last_time).toLocaleDateString("zh-CN", { month: "short", day: "numeric" }) : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
