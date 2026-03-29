@@ -16,7 +16,12 @@ type PerpStats = {
   bias_label: string;
 };
 
-type PerpListResponse = { perps: PerpStats[] };
+type PerpListResponse = {
+  perps: PerpStats[];
+  total_open_interest_usd: number;
+  total_equity_usd: number;
+  oi_equity_ratio: number;
+};
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -63,7 +68,7 @@ export default function PerpsPage() {
       </div>
 
       {/* 总览 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/10 p-2.5">
@@ -97,6 +102,19 @@ export default function PerpsPage() {
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">总空头仓位</p>
               <p className="text-2xl font-bold mt-0.5 text-red-500">
                 ${perps.reduce((s, p) => s + p.total_short_usd, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-purple-500/10 p-2.5">
+              <BarChart2 className="h-5 w-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">OI / Equity</p>
+              <p className="text-2xl font-bold mt-0.5 text-purple-500">
+                {data.oi_equity_ratio}x
               </p>
             </div>
           </div>
@@ -207,10 +225,12 @@ function PerpDetailPanel({ symbol }: { symbol: string }) {
     <div className="rounded-xl border bg-card shadow-sm p-5 space-y-5">
       <h3 className="font-semibold text-lg">{symbol} 深度统计</h3>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           { label: "总仓位", value: data.total_positions },
           { label: "总 OI", value: `$${data.total_open_interest_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+          { label: "市场 Equity", value: `$${(data.total_equity_usd || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+          { label: "OI/Equity", value: `${(data.oi_equity_ratio || 0).toFixed(2)}x` },
           { label: "平均杠杆", value: `${data.avg_leverage}x` },
           { label: "最高杠杆", value: `${data.max_leverage}x` },
           { label: "Bias", value: `${data.bias >= 0 ? "+" : ""}${(data.bias * 100).toFixed(1)}%` },
