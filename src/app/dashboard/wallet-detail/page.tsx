@@ -104,13 +104,13 @@ export default function WalletDetailPage() {
   const [fundingDays, setFundingDays] = useState<"7" | "30" | "90">("30");
 
   const { data, error, isLoading } = useSWR<WalletDetail>(
-    walletId ? `/api/v1/wallet-detail/route.ts?wallet_id=${walletId}` : null,
+    walletId ? `/api/v1/wallet-detail?wallet_id=${walletId}` : null,
     fetcher
   );
 
   const { data: equityData } = useSWR<EquityCurve>(
     walletId && tab === "equity"
-      ? `/api/v1/wallet-detail/equity-curve/route.ts?wallet_id=${walletId}&granularity=${granularity}&days=90`
+      ? `/api/v1/wallet-detail/equity-curve?wallet_id=${walletId}&granularity=${granularity}&days=90`
       : null,
     fetcher
   );
@@ -125,7 +125,7 @@ export default function WalletDetailPage() {
     by_symbol: Record<string, { total_funding_usd: number; count: number; first_time: string; last_time: string }>;
   }>(
     walletAddress && tab === "funding"
-      ? `/api/v1/wallets/${walletAddress}/funding/route.ts?days=${fundingDays}`
+      ? `/api/v1/wallets/${walletAddress}/funding?days=${fundingDays}`
       : null,
     fetcher
   );
