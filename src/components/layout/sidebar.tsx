@@ -8,6 +8,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
+function navPathActive(pathname: string, href: string): boolean {
+  if (href === "/dashboard") {
+    return pathname === "/dashboard" || pathname === "/zh-CN/dashboard" || pathname === "/en/dashboard";
+  }
+  if (pathname === href) return true;
+  for (const prefix of ["/zh-CN", "/en"]) {
+    const localized = `${prefix}${href}`;
+    if (pathname === localized || pathname.startsWith(`${localized}/`)) return true;
+  }
+  return pathname.startsWith(`${href}/`);
+}
+
 const navItems = [
   { href: "/dashboard", label: "总览", icon: Home },
   { href: "/dashboard/hypertracker", label: "Hypertracker", icon: TrendingUp },
@@ -39,7 +51,7 @@ function SidebarContent() {
       <nav className="space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const active = navPathActive(pathname, item.href);
           return (
             <Link
               key={item.href}
