@@ -7,3 +7,9 @@ export async function redirectToLocaleDashboard(pathSegment: string): Promise<ne
   const locale = await getLocale().catch(() => routing.defaultLocale);
   redirect(`/${locale}/dashboard/${pathSegment}`);
 }
+
+/** `/{locale}/dashboard/...` → 仅实现于 `app/dashboard/` 下的页面 */
+export function redirectToNonLocaleDashboard(relativePath: string): never {
+  const clean = relativePath.replace(/^\/+/, "");
+  redirect(`/dashboard/${clean}`);
+}

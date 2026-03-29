@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { redirectToNonLocaleDashboard } from "@/lib/dashboard-locale-redirect";
 
-/** 订阅与账单仅实现于 `app/dashboard/billing`，统一回到无 locale 前缀路由 */
+/** 订阅与账单仅实现于 `app/dashboard/billing` */
 export default function BillingLocaleAliasPage() {
-  redirect("/dashboard/billing");
+  redirectToNonLocaleDashboard("billing");
 }
