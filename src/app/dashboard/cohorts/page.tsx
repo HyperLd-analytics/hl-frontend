@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLoading } from "@/components/common/page-loading";
 import { PageError } from "@/components/common/page-error";
 import { useApiQuery } from "@/hooks/use-api-query";
-import { TrendingUp, TrendingDown, Users, Activity, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Users, Activity, Wallet, TrendingUpIcon } from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine
+} from "recharts";
 
 interface CohortEntry {
   cohort?: string;
@@ -115,8 +119,21 @@ export default function CohortsPage() {
   const { data, loading, error, refetch } = useApiQuery<CohortsResponse>("/cohorts", {
     staleTimeMs: 30_000,
   });
+  const [trendDays, setTrendDays] = useState<"7" | "14" | "30">("14");
+  const [cohortType, setCohortType] = useState<"size" | "pnl">("size");
+
+  const { data: biasData, loading: biasLoading } = useApiQuery<{
+    data: Array<{ date: string; bias: number; long_usd: number; short_usd: number; wallet_count: number }>;
+  }>(`/cohorts/bias-history?cohort_type=${cohortType}&days=${trendDays}`, {
+    staleTimeMs: 60_000,
+  });
 
   const cohorts: CohortEntry[] = data?.cohorts ?? data?.data ?? [];
+
+  const biasPoints = biasData?.data ?? [];
+  const latestBias = biasPoints.length > 0 ? biasPoints[biasPoints.length - 1].bias : 0;
+  const startBias = biasPoints.length > 0 ? biasPoints[0].bias : 0;
+  const biasDelta = latestBias - startBias;
 
   return (
     <div className="space-y-6">
@@ -149,6 +166,122 @@ export default function CohortsPage() {
           );
         })}
       </div>
+
+      {/* Bias Trend Chart */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <TrendingUpIcon className="h-5 w-5 text-primary" />
+              多空偏向趋势（Bias Trend）
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              各 Cohort 过去{trendDays}天多空偏向变化
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Cohort Type Toggle */}
+            <div className="flex rounded-lg border bg-muted p-0.5 text-xs">
+              <button
+                onClick={() => setCohortType("size")}
+                className={`px-3 py-1.5 rounded-md transition-colors ${cohortType === "size" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                规模 Cohort
+              </button>
+              <button
+                onClick={() => setCohortType("pnl")}
+                className={`px-3 py-1.5 rounded-md transition-colors ${cohortType === "pnl" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                盈亏 Cohort
+              </button>
+            </div>
+            {/* Days Toggle */}
+            <div className="flex rounded-lg border bg-muted p-0.5 text-xs">
+              {(["7", "14", "30"] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setTrendDays(d)}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${trendDays === d ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {d}D
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {biasLoading ? (
+          <div className="h-48 flex items-center justify-center">
+            <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : biasPoints.length === 0 ? (
+          <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-2">
+            <Activity className="h-8 w-8 opacity-30" />
+            <p className="text-sm">暂无{trendDays}天偏向数据</p>
+          </div>
+        ) : (
+          <>
+            {/* Summary */}
+            <div className="flex items-center gap-6 mb-3">
+              <div>
+                <span className="text-xs text-muted-foreground">当前 Bias</span>
+                <p className={`text-lg font-bold ${latestBias > 0 ? "text-green-500" : latestBias < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                  {latestBias >= 0 ? "+" : ""}{(latestBias * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">{trendDays}天变化</span>
+                <p className={`text-lg font-bold ${biasDelta >= 0 ? "text-green-500" : "text-red-500"}`}>
+                  {biasDelta >= 0 ? "+" : ""}{(biasDelta * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">最近更新</span>
+                <p className="text-sm font-medium">{biasPoints[biasPoints.length - 1]?.date ?? "-"}</p>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={biasPoints}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickFormatter={(v: string) => v.slice(5)}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+                    domain={[-1, 1]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                    }}
+                    formatter={(value: number) => [`${(value * 100).toFixed(2)}%`, "Bias"]}
+                    labelFormatter={(label: string) => `日期: ${label}`}
+                  />
+                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                  <Line
+                    type="monotone"
+                    dataKey="bias"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+      </Card>
 
       {loading && <PageLoading />}
 

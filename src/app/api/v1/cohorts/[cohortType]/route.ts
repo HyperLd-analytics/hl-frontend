@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 
-const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-production-4aa1.up.railway.app";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 const COHORT_MAP: Record<string, string> = {
   MONEY_PRINTER: "money_printer",
@@ -16,6 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ cohortType: string }> }
 ) {
   try {
+    const authHeader = request.headers.get("authorization");
     const { cohortType } = await params;
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get("limit") ?? "10";
@@ -23,8 +24,14 @@ export async function GET(
     const backendCohort = COHORT_MAP[cohortType] ?? cohortType.toLowerCase();
 
     const res = await fetch(
-      `${RAILWAY_URL}/api/v1/cohorts/segment/${backendCohort}?limit=${limit}&sort_by=${sortBy}`,
-      { headers: { "Content-Type": "application/json" }, cache: "no-store" }
+      `${API_BASE}/api/v1/cohorts/segment/${backendCohort}?limit=${limit}&sort_by=${sortBy}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          ...(authHeader ? { Authorization: authHeader } : {}),
+        },
+        cache: "no-store",
+      }
     );
 
     if (!res.ok) {

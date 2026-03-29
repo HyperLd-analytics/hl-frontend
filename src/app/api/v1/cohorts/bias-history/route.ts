@@ -7,7 +7,13 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
-    const url = `${API_BASE}/api/v1/cohorts`;
+    const { searchParams } = new URL(request.url);
+    const cohortType = searchParams.get("cohort_type") || "size";
+    const cohort = searchParams.get("cohort") || "ALL";
+    const symbol = searchParams.get("symbol") || "ALL";
+    const days = searchParams.get("days") || "14";
+
+    const url = `${API_BASE}/api/v1/cohorts/bias-history?cohort_type=${cohortType}&cohort=${cohort}&symbol=${symbol}&days=${days}`;
     const res = await fetch(url, {
       headers: {
         ...(authHeader ? { Authorization: authHeader } : {}),
@@ -16,7 +22,7 @@ export async function GET(request: NextRequest) {
     });
     if (!res.ok) throw new Error(`Backend error: ${res.status}`);
     return NextResponse.json(await res.json());
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to fetch cohorts" }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch bias history" }, { status: 500 });
   }
 }
