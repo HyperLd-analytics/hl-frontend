@@ -5,14 +5,14 @@ const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL || "https://hl-backend-p
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams.toString();
-  const url = `${RAILWAY_URL}/api/v1/community/posts/${searchParams ? `?${searchParams}` : ""}`;
+  const url = `${RAILWAY_URL}/api/v1/community/posts${searchParams ? `?${searchParams}` : ""}`;
   const authHeader = request.headers.get("authorization");
 
   try {
     const res = await fetch(url, {
       headers: {
         "Content-Type": "application/json",
-        ...(authHeader ? { "Authorization": authHeader } : {}),
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
       cache: "no-store",
     });
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const url = `${RAILWAY_URL}/api/v1/community/posts/`;
+  const url = `${RAILWAY_URL}/api/v1/community/posts`;
   const authHeader = request.headers.get("authorization");
   const body = await request.text();
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(authHeader ? { "Authorization": authHeader } : {}),
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
       body,
     });
