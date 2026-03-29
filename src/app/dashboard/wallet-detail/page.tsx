@@ -64,7 +64,7 @@ function PnLCurve({ curve }: { curve: WalletDetail["pnl_curve"] }) {
         <XAxis dataKey="date" tick={{ fontSize: 10 }} className="text-muted-foreground" />
         <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
         <Tooltip
-          formatter={(value: number) => [`$${value.toLocaleString()}`, "累计 PnL"]}
+          formatter={(value) => [`$${(value as number).toLocaleString()}`, "累计 PnL"]}
           contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
         />
         <Line

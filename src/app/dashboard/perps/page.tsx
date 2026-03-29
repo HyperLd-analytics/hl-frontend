@@ -184,7 +184,7 @@ export default function PerpsPage() {
 
 function PerpDetailPanel({ symbol }: { symbol: string }) {
   const { data, isLoading } = useSWR<any>(
-    selectedSymbol ? `/api/v1/perps/${symbol}` : null,
+    symbol ? `/api/v1/perps/${symbol}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -227,7 +227,7 @@ function PerpDetailPanel({ symbol }: { symbol: string }) {
         <p className="text-sm font-medium mb-3">各规模 Cohort 多空分布</p>
         <div className="space-y-2">
           {Object.entries(cohort_breakdown || {})
-            .filter(([, v]) => v.long_usd > 0 || v.short_usd > 0)
+            .filter(([, v]) => (v as any).long_usd > 0 || (v as any).short_usd > 0)
             .map(([cohort, stats]: [string, any]) => {
               const total = stats.long_usd + stats.short_usd;
               const longPct = total > 0 ? (stats.long_usd / total) * 100 : 50;
